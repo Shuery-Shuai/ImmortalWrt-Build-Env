@@ -1,12 +1,12 @@
 # ImmortalWrt Build Environment
 
-## 简介
+## 📖 项目简介
 
 用于构建 ImmortalWrt 固件编译的 Docker 环境。
 
-## 用法
+## 🧭 操作指南
 
-### 获取镜像
+### 💽 获取镜像
 
 > [!NOTE]
 >
@@ -20,7 +20,7 @@ docker pull shuery/immortalwrt-build-env:latest
 
 #### 构建镜像
 
-1. 克隆本仓库
+1. 克隆代码
 
    ```sh
    git clone --depth 1 https://github.com/Shuery-Shuai/ImmortalWrt-Build-Env.git
@@ -40,7 +40,7 @@ docker pull shuery/immortalwrt-build-env:latest
      docker buildx build --platform linux/amd64 -t shuery/immortalwrt-build-env:latest ImmortalWrt-Build-Env
      ```
 
-### 运行容器
+### 📦 运行容器
 
 > [!CAUTION]
 >
@@ -89,7 +89,7 @@ docker run \
   shuery/immortalwrt-build-env:latest
 ```
 
-### 进入容器
+### 🚪 进入容器
 
 ```sh
 docker exec -it immortalwrt-build-env /bin/bash
