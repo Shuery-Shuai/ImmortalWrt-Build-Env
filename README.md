@@ -20,17 +20,25 @@ docker pull shuery/immortalwrt-build-env:latest
 
 #### 构建镜像
 
-- Linux/Windows
+1. 克隆本仓库
 
-  ```sh
-  docker build -t shuery/immortalwrt-build-env:latest https://github.com/Shuery-Shuai/ImmortalWrt-Build-Env
-  ```
+   ```sh
+   git clone --depth 1 https://github.com/Shuery-Shuai/ImmortalWrt-Build-Env.git
+   ```
 
-- macOS
+2. 构建镜像
 
-  ```sh
-  docker buildx build --platform linux/amd64 -t shuery/immortalwrt-build-env:latest https://github.com/Shuery-Shuai/ImmortalWrt-Build-Env
-  ```
+   - Linux/Windows
+
+     ```sh
+     docker build -t shuery/immortalwrt-build-env:latest ImmortalWrt-Build-Env
+     ```
+
+   - macOS
+
+     ```sh
+     docker buildx build --platform linux/amd64 -t shuery/immortalwrt-build-env:latest ImmortalWrt-Build-Env
+     ```
 
 ### 运行容器
 
