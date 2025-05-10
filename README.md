@@ -1,5 +1,9 @@
 # ImmortalWrt Build Environment
 
+[![Docker Publish](https://github.com/Shuery-Shuai/ImmortalWrt-Build-Env/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Shuery-Shuai/ImmortalWrt-Build-Env/actions)
+[![GitHub Container Registry](https://img.shields.io/badge/Container%20Registry-GHCR-black)](https://github.com/Shuery-Shuai/ImmortalWrt-Build-Env/pkgs/container/ImmortalWrt-Build-Env)
+[![Docker Hub](https://img.shields.io/badge/Container%20Registry-DockerHub-blue)](https://hub.docker.com/r/shuery/yunzai)
+
 ## 📖 项目简介
 
 用于构建 ImmortalWrt 固件编译的 Docker 环境。
