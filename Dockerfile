@@ -5,7 +5,7 @@ FROM debian:$DEBIAN_TAG
 # Prepare System Requrements
 RUN apt-get update && \
     apt-get install -y \
-    sudo bash curl git \
+    sudo bash curl git && \
     bash -c \
     'bash <(curl -s https://build-scripts.immortalwrt.org/init_build_environment.sh)' && \
     apt-get clean && \
