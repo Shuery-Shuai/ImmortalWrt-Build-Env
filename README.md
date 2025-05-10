@@ -19,7 +19,7 @@
 #### 拉取镜像
 
 ```bash
-docker pull shuery/immortalwrt-build-env:latest
+docker pull shuery/immortalwrt-build-env:latest --platform linux/amd64
 ```
 
 #### 构建镜像
@@ -35,7 +35,7 @@ docker pull shuery/immortalwrt-build-env:latest
    - Linux/Windows
 
      ```sh
-     docker build -t shuery/immortalwrt-build-env:latest ImmortalWrt-Build-Env
+     docker build --platform linux/amd64 -t shuery/immortalwrt-build-env:latest ImmortalWrt-Build-Env
      ```
 
    - macOS
