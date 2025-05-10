@@ -35,13 +35,17 @@ docker pull shuery/immortalwrt-build-env:latest --platform linux/amd64
    - Linux/Windows
 
      ```sh
-     docker build --platform linux/amd64 -t shuery/immortalwrt-build-env:latest ImmortalWrt-Build-Env
+     docker build --platform linux/amd64 \
+       -t shuery/immortalwrt-build-env:latest \
+       ImmortalWrt-Build-Env
      ```
 
    - macOS
 
      ```sh
-     docker buildx build --platform linux/amd64 -t shuery/immortalwrt-build-env:latest ImmortalWrt-Build-Env
+     docker buildx build --platform linux/amd64 \
+       -t shuery/immortalwrt-build-env:latest \
+       ImmortalWrt-Build-Env
      ```
 
 ### 📦 运行容器
@@ -65,8 +69,15 @@ IMMORTALWRT_PATH=/path/to/immortalwrt
 >      可以先使用 `hdiutil` 创建并挂载 `SparseBundle` 类型的 `Case-sensitive` 磁盘镜像：
 >
 >      ```sh
->      hdiutil createvolume -size 64G -fs "Case-sensitive APFS" -type SPARSEBUNDLE -name -volname ImmortalWrt
->      hdiutil attach -mountpoint $IMMORTALWRT_PATH ImmortalWrt.sparsebundle
+>      hdiutil create \
+>        -size 64G \
+>        -type SPARSEBUNDLE \
+>        -fs "Case-sensitive APFS" \
+>        -volname ImmortalWrt \
+>        ImmortalWrt.sparsebundle
+>      sudo hdiutil attach \
+>        -mountpoint $IMMORTALWRT_PATH \
+>        ImmortalWrt.sparsebundle
 >      ```
 >
 >    - **Windows**
@@ -75,14 +86,19 @@ IMMORTALWRT_PATH=/path/to/immortalwrt
 >
 >      ```sh
 >      mkdir $IMMORTALWRT_PATH
->      fsutil file setCaseSensitiveInfo $IMMORTALWRT_PATH enable
+>      fsutil file setCaseSensitiveInfo \
+>        $IMMORTALWRT_PATH enable
 >      ```
 >
 > 2. 然后再克隆 ImmortalWrt 源码：
 >
 >    ```sh
 >    cd $IMMORTALWRT_PATH
->    git clone -b <branch> --single-branch --filter=blob:none https://github.com/immortalwrt/immortalwrt .
+>    git clone --depth 1 \
+>      -b $BRANCH --single-branch \
+>      --filter=blob:none \
+>      https://github.com/immortalwrt/immortalwrt \
+>      .
 >    ```
 
 ```sh
