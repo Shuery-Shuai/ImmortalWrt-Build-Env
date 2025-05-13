@@ -1,8 +1,8 @@
 # ImmortalWrt Build Environment
 
 [![Docker Publish](https://github.com/Shuery-Shuai/ImmortalWrt-Build-Env/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Shuery-Shuai/ImmortalWrt-Build-Env/actions)
-[![GitHub Container Registry](https://img.shields.io/badge/Container%20Registry-GHCR-black)](https://github.com/Shuery-Shuai/ImmortalWrt-Build-Env/pkgs/container/ImmortalWrt-Build-Env)
-[![Docker Hub](https://img.shields.io/badge/Container%20Registry-DockerHub-blue)](https://hub.docker.com/r/shuery/yunzai)
+[![GitHub Container Registry](https://img.shields.io/badge/Container%20Registry-GHCR-black)](https://github.com/Shuery-Shuai/ImmortalWrt-Build-Env/pkgs/container/immortalwrt-build-env)
+[![Docker Hub](https://img.shields.io/badge/Container%20Registry-DockerHub-blue)](https://hub.docker.com/r/shuery/immortalwrt-build-env)
 
 ## 📖 项目简介
 
