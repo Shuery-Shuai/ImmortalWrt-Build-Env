@@ -105,6 +105,7 @@ IMMORTALWRT_PATH=/path/to/immortalwrt
 docker run \
   -itd \
   --name immortalwrt-build-env \
+  --platform linux/amd64 \
   -v $IMMORTALWRT_PATH:/home/immortalwrt \
   shuery/immortalwrt-build-env:latest
 ```
