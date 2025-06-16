@@ -3,7 +3,7 @@ ARG DEBIAN_TAG=bullseye
 FROM debian:$DEBIAN_TAG
 
 # Prepare System Requrements
-RUN apt-get update && \
+RUN apt-get update && apt-get full-upgrade -y \
     apt-get install -y \
     sudo bash curl git \
     ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
