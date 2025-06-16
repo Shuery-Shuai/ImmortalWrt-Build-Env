@@ -2,10 +2,10 @@ ARG DEBIAN_TAG=bullseye
 
 FROM debian:$DEBIAN_TAG
 
-# Prepare System Requrements
+# Prepare System Requirements
 RUN apt-get update && apt-get full-upgrade -y && \
     apt-get install -y \
-    sudo bash curl git \
+    sudo bash \
     ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
     bzip2 ccache clang cmake cpio curl device-tree-compiler ecj fastjar flex gawk gettext gcc-multilib \
     g++-multilib git gnutls-dev gperf haveged help2man intltool lib32gcc-s1 libc6-dev-i386 libelf-dev \
@@ -44,7 +44,7 @@ RUN set -ex && \
 
 # Add User ImmortalWrt
 RUN useradd -m immortalwrt -s /bin/bash && \
-    echo 'immortalwrt ALL=NOPASSWD: ALL' >/etc/sudoers.d/immortalwrt
+    echo 'immortalwrt ALL=NOPASSWD: ALL' > /etc/sudoers.d/immortalwrt
 
 # Configure Git Info
 RUN git config --system user.name "immortalwrt" && \
