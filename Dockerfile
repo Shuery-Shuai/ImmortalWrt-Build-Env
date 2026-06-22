@@ -50,7 +50,7 @@ RUN useradd -m immortalwrt -s /bin/bash && \
 RUN git config --system user.name "immortalwrt" && \
     git config --system user.email "immortalwrt@build.env"
 
-VOLUME [ "/home/immortalwrt" ]
+VOLUME [ "/home/immortalwrt/workdir" ]
 
 USER immortalwrt
-WORKDIR /home/immortalwrt
+WORKDIR /home/immortalwrt/workdir
