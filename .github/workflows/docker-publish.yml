@@ -87,19 +87,31 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # Generate extra tags from git tag for Docker metadata
-      - name: Generate extra tags from git tag
+      - name: Generate extra tags
         id: gen-tags
-        if: startsWith(github.ref, 'refs/tags/')
+        if: |
+          (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.tag != '')
         run: |
-          TAG_NAME="${GITHUB_REF#refs/tags/}"
-          # 提取 Debian 代号（假设格式为 代号-v版本）
-          DISTRO="${TAG_NAME%-v*}"
-          if [[ "$DISTRO" != "$TAG_NAME" ]]; then
-            # 输出一行 type=raw 标签定义，value 为代号
-            echo "extra_tags=type=raw,value=$DISTRO" >> $GITHUB_OUTPUT
-          else
-            echo "extra_tags=" >> $GITHUB_OUTPUT
+          TAGS=""
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            DISTRO="${TAG_NAME%-v*}"
+            if [[ "$DISTRO" != "$TAG_NAME" ]]; then
+              TAGS+=$'type=raw,value='"$DISTRO"$'\n'
+            fi
+            TAGS+=$'type=raw,value='"$TAG_NAME"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            INPUT_TAG="${{ github.event.inputs.tag }}"
+            DISTRO="${INPUT_TAG%-v*}"
+            if [[ "$DISTRO" != "$INPUT_TAG" ]]; then
+              TAGS+=$'type=raw,value='"$DISTRO"$'\n'
+            fi
+            TAGS+=$'type=raw,value='"$INPUT_TAG"
           fi
+          echo 'extra_tags<<EOF' >> $GITHUB_OUTPUT
+          echo "$TAGS" >> $GITHUB_OUTPUT
+          echo 'EOF' >> $GITHUB_OUTPUT
 
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
