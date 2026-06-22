@@ -14,6 +14,13 @@ on:
     tags: ["v*.*.*", "*-v*"]
   pull_request:
     branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要构建的 Git 标签（例如 bullseye-v1.0）'
+        required: false
+        type: string
+        default: ''
 
 env:
   # Use docker.io for Docker Hub if empty
@@ -34,7 +41,17 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout repository
+      # Checkout the repository at the tag if provided manually,
+      # otherwise checkout the default branch.
+      - name: Checkout tag if provided manually
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.tag != ''
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag }}
+
+      # Checkout the repository at the default branch if no tag is provided manually.
+      - name: Checkout repository (default)
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.tag == ''
         uses: actions/checkout@v4
 
       # Install the cosign tool except on PR
