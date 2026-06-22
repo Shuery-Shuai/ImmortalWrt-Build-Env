@@ -11,7 +11,7 @@ on:
   push:
     branches: ["main"]
     # Publish semver tags as releases.
-    tags: ["v*.*.*"]
+    tags: ["v*.*.*", "*-v*"]
   pull_request:
     branches: ["main"]
 
@@ -69,6 +69,21 @@ jobs:
           username: ${{ vars.DOCKERHUB_ACCOUNT }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # Generate extra tags from git tag for Docker metadata
+      - name: Generate extra tags from git tag
+        id: gen-tags
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          # 提取 Debian 代号（假设格式为 代号-v版本）
+          DISTRO="${TAG_NAME%-v*}"
+          if [[ "$DISTRO" != "$TAG_NAME" ]]; then
+            # 输出一行 type=raw 标签定义，value 为代号
+            echo "extra_tags=type=raw,value=$DISTRO" >> $GITHUB_OUTPUT
+          else
+            echo "extra_tags=" >> $GITHUB_OUTPUT
+          fi
+
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
       - name: Extract Docker metadata
@@ -80,6 +95,7 @@ jobs:
             ${{ env.HUB_REGISTRY }}/${{ env.HUB_IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            ${{ steps.gen-tags.outputs.extra_tags }}
             type=ref,event=tag
             type=ref,event=pr
           labels: |
