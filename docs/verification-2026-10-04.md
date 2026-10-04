@@ -2,7 +2,8 @@
 
 ## 方法
 
-在正式 PR 之前，用一次性验证通道（`.github/workflows/verify-only.yml`，由 `smokeverify*` tag 触发）
+在正式 PR 之前，用**临时**的一次性验证通道（位于临时分支 `verify/scratch` 的 `verify-only.yml`，
+由 `smokeverify*` tag 触发，验证完成后即删除）
 在 GitHub runner 上执行**真实的无缓存构建 + 镜像内冒烟 + 包清单守门 + 体积测量**。
 该通道**不推送任何镜像、不签名、不建 Release**，产物回写到 `verify/scratch` 分支供匿名读取。
 
