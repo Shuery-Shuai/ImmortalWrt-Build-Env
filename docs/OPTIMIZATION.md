@@ -77,7 +77,7 @@
 | -------------- | -------------------------- | ------------------------------------------------------------------------------------------ |
 | build + PR 证据 | PR | 构建并 `load` 到本地：跑 `scripts/smoke-test.sh`、包清单守门（vs 已发布镜像）、体积报告，包清单作为 artifact；**不推送** |
 | publish        | push `main` / dispatch     | 构建、冒烟、推送、cosign 签名、生成 SBOM、建 GitHub Release + 日期 tag                     |
-| canary         | 每月一次 + 手动           | `no-cache` 从零构建 + 冒烟；**不推送、不建 tag**；失败或检测到上游变化时开 Issue            |
+| canary         | 每月 1 日 + 手动          | `no-cache` 从零构建 + 冒烟 + trivy CVE 扫描（仅报告）；**不推送、不建 tag**；每月发布一条滚动 Issue 记录结果（失败或漂移显著标注） |
 | dependabot     | 每周一                     | base digest 与 actions 更新 PR                                                             |
 
 `scripts/smoke-test.sh` 断言内容：

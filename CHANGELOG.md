@@ -11,8 +11,9 @@
 
 - CI 证据设施：PR 上执行冒烟测试、包清单守门（对比上一版已发布镜像）与体积报告，
   并把报告作为 PR 评论发布、同时上传为 artifact。
-- 每月 1 日 04:00 UTC 的从零构建巡检（canary）：`no-cache` 构建 + 冒烟 + 上游脚本漂移检测，
-  失败或漂移时开/更新 Issue；不推送、不建 tag。
+- 每月 1 日 04:00 UTC 的从零构建巡检（canary）：`no-cache` 构建 + 冒烟 + 上游脚本漂移检测
+  + trivy CVE 扫描（CRITICAL/HIGH，仅报告、不阻断）；每月发布一条**滚动 Issue** 记录结果，
+  不推送、不建 tag。
 - 发布时生成 SBOM attestation；cosign 升级到 v3 并新增"签名后立即 verify"的校验步骤。
 - Dependabot：`docker` 与 `github-actions` 两个生态，每周一提 PR。
 - `docs/OPTIMIZATION.md`：优化共识、验收清单与残余缺口。
