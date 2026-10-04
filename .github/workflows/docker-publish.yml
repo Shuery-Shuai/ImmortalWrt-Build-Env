@@ -253,7 +253,11 @@ jobs:
       # 把证据报告作为 PR 评论发布：CI 日志需要鉴权才能读取，评论可以匿名读，
       # 便于会话/外部工具直接取用（同一条评论会被后续运行覆写，不会刷屏）。
       - name: 发布 CI 证据报告到 PR (PR only)
-        if: always() && github.event_name == 'pull_request'
+        # fork / Dependabot 的 PR 拿不到 pull-requests: write，评论会 403。
+        # 这类 PR 直接跳过评论（Step Summary 与 artifact 照常产出），并加 continue-on-error 兜底，
+        # 否则每周一的 Dependabot PR 都会显示一次假红。
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
