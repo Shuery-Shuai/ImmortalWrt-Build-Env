@@ -35,6 +35,7 @@
 | 补丁 | 内容 | 锚点 |
 | ---- | ---- | ---- |
 | `0001-pin-extra-artifacts.patch` | 钉死脚本内部两处构建期未固定的远端引用：`padjffs2.c` 与 `openwrt/luci.git`（用于构建 `po2lmo`） | `padjffs2.c` 自 2016-07-11（`d06b68f`）未再变动；`luci` 固定为 `aa3d488`（2026-10-01） |
+| `0002-add-llvm-dev.patch` | 在脚本的 LLVM 安装行补上 `llvm-$LLVM_VERSION-dev`：关闭 Recommends 后它不再被隐式带入，而它只存在于 apt.llvm.org（脚本运行中才配置），无法写进 `packages.txt` | 脚本第 254 行的 LLVM 安装行 |
 
 这两处 pin **不会自动更新**：需要时人工 bump（改 patch → 更新上表 → CI 冒烟重跑）。
 理由：它们是稳定的构建期小工具，"可复现"比"总是最新"更重要。

@@ -29,8 +29,8 @@ llvm
 libgnutls28-dev
 
 # --- 显式补回的“承重” Recommends（关闭 Recommends 后不再自动带入，但承担实际功能） ---
-# llvm-18-dev：llvm-18 的 Recommends，提供 LLVM 头文件与 cmake 配置；宿主工具链可能链接它，
-#   上游脚本原本靠默认开启的 Recommends 隐式带入，这里显式保留以免静默丢失（约 326 MB）。
-llvm-18-dev
+# llvm-18-dev 不在此清单：它只存在于 apt.llvm.org，而该源由上游脚本在运行中才配置——
+#   写在这里会让构建期报 "Unable to locate package" 并以 exit 100 失败（已由 CI 实测确认）。
+#   改由 scripts/patches/0002-add-llvm-dev.patch 在脚本的 LLVM 安装行上补回。
 # qemu-block-extra：qemu-img 的额外块驱动（vmdk/vdi 等）；x86 目标生成 VMware/VirtualBox 镜像时用到。
 qemu-block-extra
