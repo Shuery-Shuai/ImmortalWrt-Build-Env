@@ -22,6 +22,10 @@ on:
         required: false
         type: string
         default: ''
+      canary:
+        description: '只做巡检（从零构建 + 冒烟 + 漂移 + CVE），不发布任何镜像'
+        type: boolean
+        default: false
 
 env:
   # Use docker.io for Docker Hub if empty
@@ -35,7 +39,7 @@ env:
 
 jobs:
   build:
-    if: github.event_name != 'schedule'
+    if: github.event_name != 'schedule' && !(github.event_name == 'workflow_dispatch' && inputs.canary)
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -96,13 +100,15 @@ jobs:
       # 由 tag 推送触发时直接沿用该 tag；由 main 推送或手动 dispatch（tag 留空）触发时按日期生成。
       - name: 计算发布 tag
         id: release
-        if: |
-          github.event_name == 'push' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.tag == '')
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         run: |
           set -euo pipefail
+          INPUT_TAG="${{ github.event.inputs.tag }}"
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             NAME="${GITHUB_REF_NAME}"
+            IS_MAIN="false"
+          elif [ -n "${INPUT_TAG}" ]; then
+            NAME="${INPUT_TAG}"
             IS_MAIN="false"
           else
             BASE="bookworm-$(date -u +%Y.%m.%d)"
@@ -329,10 +335,28 @@ jobs:
             git tag "$NAME"
             git push origin "refs/tags/$NAME"
           fi
+          SIZE_LINE="(本地验证镜像不可用，未测量)"
+          if docker image inspect immortalwrt-build-env:verify >/dev/null 2>&1; then
+            U="$(docker image inspect -f '{{.Size}}' immortalwrt-build-env:verify)"
+            docker save immortalwrt-build-env:verify -o /tmp/rel.img.tar
+            mkdir -p /tmp/rel.img && tar -xf /tmp/rel.img.tar -C /tmp/rel.img
+            TOTAL=0
+            if compgen -G "/tmp/rel.img/*/layer.tar" >/dev/null; then
+              FILES=$(find /tmp/rel.img -name layer.tar)
+            else
+              FILES=$(find /tmp/rel.img/blobs/sha256 -type f -size +100k 2>/dev/null)
+            fi
+            for f in $FILES; do
+              S="$(gzip -6 -c "$f" | wc -c | tr -d ' ')"
+              TOTAL=$((TOTAL + S))
+            done
+            SIZE_LINE="未压缩 $(numfmt --to=iec "$U") / 分层 gzip 合计 $(numfmt --to=iec "$TOTAL")"
+          fi
           {
             echo "不可变镜像 tag：\`$NAME\`（同 tag 永不重写；需要完全可复现请用 digest 引用）"
             echo ""
             echo "- digest：\`$DIGEST\`"
+            echo "- 体积：${SIZE_LINE}"
             echo "- 平台：linux/amd64"
             echo "- 上游构建脚本：\`$(grep '^COMMIT=' scripts/upstream.lock | cut -d= -f2)\`"
             echo "- 包清单：\`scripts/packages.txt\`（构建产物清单见对应 PR 的 CI 证据报告）"
@@ -352,7 +376,7 @@ jobs:
   #   2. 上游脚本是否已经漂移（vendor 版本是否需要人工同步）？
   # 失败或漂移都会开（或更新）一个 Issue。
   canary:
-    if: github.event_name == 'schedule'
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.canary)
     runs-on: ubuntu-latest
     permissions:
       contents: read
