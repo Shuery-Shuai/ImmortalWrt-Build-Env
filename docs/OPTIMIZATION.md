@@ -71,21 +71,26 @@
 - **首次以本改动跑 CI 仍可能失败**：守门机制要求被移除的包逐个登记，第一次运行会用真实 diff 清单告诉我们到底少了什么，登记后才允许合并。这是设计行为（先证明再删），不是故障。
 - 测量口径：以 CI（GitHub runner）的构建时长与注册表压缩体积为准（本机 Apple Silicon 构建走模拟，不具代表性）。
 
+- **超出原共识文本的增补**：PR 证据报告会同时以 PR 评论发布（原共识只要求 Step Summary 与 artifact）。
+  理由：CI 日志需鉴权才能读取，而评论可匿名读取，便于 review 与外部工具取用；若不需要，删掉该步骤即可。
+- **基线不可用时的行为**：包清单守门需拉取上一版已发布镜像；若拉取失败（例如 fork 尚无同名包），
+  守门会**跳过并在 PR 报告中显著标注**，而不是静默通过。
+
 ## 7. CI 骨架
 
 | Job            | 触发                       | 行为                                                                                       |
 | -------------- | -------------------------- | ------------------------------------------------------------------------------------------ |
-| build + PR 证据 | PR | 构建并 `load` 到本地：跑 `scripts/smoke-test.sh`、包清单守门（vs 已发布镜像）、体积报告，包清单作为 artifact；**不推送** |
+| build + PR 证据 | PR | 构建并 `load` 到本地：跑 `scripts/smoke-test.sh`、包清单守门（vs 已发布镜像）、体积报告，包清单作为 artifact；证据报告同时以 PR 评论发布（便于匿名读取与 review）；**不推送** |
 | publish        | push `main` / dispatch     | 构建、冒烟、推送、cosign 签名、生成 SBOM、建 GitHub Release + 日期 tag                     |
 | canary         | 每月 1 日 + 手动          | `no-cache` 从零构建 + 冒烟 + trivy CVE 扫描（仅报告）；**不推送、不建 tag**；每月发布一条滚动 Issue 记录结果（失败或漂移显著标注） |
 | dependabot     | 每周一                     | base digest 与 actions 更新 PR                                                             |
 
 `scripts/smoke-test.sh` 断言内容：
 
-1. 工具链存在性与版本：`gcc` / `g++` / `cc` / `c++` 软链指向预期 GCC 主版本；`clang-18` / `lld` / `llvm`、`python3`、`node`、`ccache`、`make`、`rsync`、`unzip`、`git`、`patch` 存在。
+1. 工具链存在性与版本：`gcc` / `g++` / `cc` / `c++` 软链指向预期 GCC 主版本；`clang`（版本须为 18）/ `clang++` / `lld`、`/usr/lib/llvm-18` 与 `llvm-config`、`python3`、`node`、`ccache`、`make`、`rsync`、`unzip`、`git`、`patch` 存在。
 2. **上游 host prereq 断言**（来源：`immortalwrt/prereq-build.mk` @ 记录 commit）：`gcc -dumpversion` 匹配 `^(1[0-9]|[2-9][0-9])`、`g++` 同理、`python3 -V` ≥ 3.8、`tar`/`find`/`bash`/`xargs`/`patch`/`diff` 为 GNU 版、`rsync` 可用。
 3. 功能性验证：编译并运行带 `pthread` 的 C hello-world；`python3 -m py_compile` 一个临时文件。
-4. 产出包清单 diff 报告。
+4. 包清单 diff 报告由 CI 步骤产出（`scripts/package-diff.sh`），不在冒烟脚本内。
 
 其他：SBOM 每次发布必生成（buildx attestation）；CVE 扫描仅出报告、附在每月 canary 的 Issue 里，**不阻断发布**（工具链镜像 CVE 噪音大且多不可利用）。
 
@@ -111,7 +116,7 @@
 | ---- | ---- | ---- |
 | ~~上游脚本内部两处构建期未固定引用~~ | ✅ 已闭环 | 步骤② 已完成：`scripts/patches/0001-pin-extra-artifacts.patch` 把 `padjffs2.c` 钉到 `d06b68f`、`openwrt/luci` 钉到 `aa3d488`；patch 由 Dockerfile 在运行脚本前应用，失败即中断构建 |
 | 上游脚本没有 `set -e`，中途失败仍可能产出"看似成功"的镜像 | 静默的残缺环境 | 步骤③：由冒烟测试断言工具链齐全来兜底；不修改 vendored 文件本身的错误处理 |
-| Dockerfile 的 `Fix Complie Link` 层与上游脚本自身的软链逻辑重复（脚本已 `ln -svf` gcc/g++/gcc-ar/gcc-nm/gcc-ranlib 与 c++） | 冗余层、两处事实源 | 步骤③：冒烟测试到位、能断言软链指向预期版本后，按"先证明再删"处理 |
+| ~~Dockerfile 的 `Fix Complie Link` 层与上游脚本软链逻辑重复~~ | ✅ 已闭环 | 冒烟已断言 `cc`/`gcc` 与 `c++`/`g++` 一致性后，按"先证明再删"删除该层（脚本自身会 `ln -svf` gcc/g++/gcc-ar/gcc-nm/gcc-ranlib 与 c++；`cc` 由 Debian alternatives 提供），由 CI 冒烟与包清单守门验证 |
 | `curl` 必须显式留在 `scripts/packages.txt`（脚本在安装任何东西之前就要用它），`ca-certificates` 同理 | 缺失会让脚本所有 HTTPS 拉取失败 | 已在步骤①显式列出并在清单内注释原因（`--no-install-recommends` 会移除 curl 的 Recommends） |
 
 ## 11. 风险与对策
