@@ -10,81 +10,22 @@
 sudo
 bash
 
-# --- bootstrap：脚本在第 104 行 check_network 起就调用 curl，并在 update_apt_source 中用它拉取
+# --- bootstrap（刻意例外：脚本自身在安装任何东西之前就要用它们）---
+# 脚本在第 104 行 check_network 起就调用 curl，并在 update_apt_source 中用它拉取
 #     第三方源与 GPG key；此时脚本自己的 apt 安装尚未开始。ca-certificates 是这些 HTTPS 请求的前提，
 #     不能依赖 curl 的 Recommends（步骤②开启 --no-install-recommends 后会消失）。 ---
 curl
 ca-certificates
 
-# --- 上游构建依赖（原 Dockerfile 清单，顺序保持不变以便逐行比对 diff） ---
-ack
-asciidoc
-autoconf
-automake
-autopoint
-binutils
-bison
-build-essential
-bzip2
-ccache
+# --- 我们**显式要求**、且上游 vendored 脚本不会安装的包 ---
+# 与上游脚本重复的条目已移除（§5「消除两份清单重叠」）；下面这些是脚本不装、
+# 但本镜像必须有的：见各段注释。bootstrap 段（curl/ca-certificates）是刻意的例外。
 clang
-cmake
-cpio
-device-tree-compiler
-flex
-gawk
-gettext
 gcc-multilib
 g++-multilib
-git
-gperf
-haveged
-help2man
-intltool
-libc6-dev-i386
-libelf-dev
-libglib2.0-dev
 libgmp-dev
-libltdl-dev
-libmpc-dev
-libmpfr-dev
-libncurses-dev
-libpython3-dev
-libreadline-dev
-libssl-dev
-libtool
-libyaml-dev
 lld
 llvm
-lrzsz
-msmtp
-nano
-ninja-build
-p7zip
-p7zip-full
-patch
-pkgconf
-python3
-python3-pip
-python3-ply
-python3-docutils
-python3-pyelftools
-qemu-utils
-re2c
-rsync
-scons
-squashfs-tools
-subversion
-swig
-texinfo
-unzip
-vim
-wget
-xmlto
-xxd
-zlib1g-dev
-zstd
-genisoimage
 libgnutls28-dev
 
 # --- 显式补回的“承重” Recommends（关闭 Recommends 后不再自动带入，但承担实际功能） ---
