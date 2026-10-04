@@ -1,0 +1,31 @@
+version: 2
+updates:
+  # 基础镜像 digest 升级（Dockerfile 的 FROM），每周一提交 PR
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "🐳 chore(deps)"
+    groups:
+      base-image:
+        patterns: ["*"]
+
+  # 第三方 action 的 commit SHA 固定升级，每周一提交 PR
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "🐳 chore(ci)"
+    groups:
+      actions:
+        patterns: ["*"]

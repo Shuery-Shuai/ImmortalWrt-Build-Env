@@ -1,50 +1,36 @@
-ARG DEBIAN_TAG=bookworm
+# 基础镜像按 digest 固定以保证可复现；升级由 Dependabot 每周一提 PR（见 .github/dependabot.yml）。
+# 更换 codename（例如 trixie）属于破坏性变更，走 docs/OPTIMIZATION.md §9 的升级触发器流程。
+FROM debian:bookworm@sha256:f37a335e82bca302e955fa39f9dfe28f1be618f016f8a2b56318e5a5111afc26
 
-FROM debian:$DEBIAN_TAG
+LABEL org.opencontainers.image.base.name="docker.io/library/debian:bookworm" \
+      org.opencontainers.image.base.digest="sha256:f37a335e82bca302e955fa39f9dfe28f1be618f016f8a2b56318e5a5111afc26"
+
+# 关闭推荐包安装 + 安装期不写文档/手册/本地化文件；两个 .conf 文件内有量化依据。
+# 必须在第一个 apt 操作之前生效，因此放在这里而不是 install 层的末尾。
+COPY scripts/apt-no-recommends.conf /etc/apt/apt.conf.d/99immortalwrt-build-env
+COPY scripts/dpkg-nodoc.conf /etc/dpkg/dpkg.cfg.d/01immortalwrt-build-env-nodoc
+# bookworm-backports 源：上游脚本假设它存在（只在中国网络分支写入），否则 LLVM 18 / Node / Go
+# 的安装会静默失败——详见 scripts/apt-backports.list 的说明（CI 实测确认）。
+COPY scripts/apt-backports.list /etc/apt/sources.list.d/bookworm-backports.list
 
 # Prepare System Requirements
 RUN dpkg --add-architecture i386 && \
     apt-get update && \
     apt-get full-upgrade -y
 
-RUN apt-get install -y \
-    sudo bash \
-    ack asciidoc autoconf automake autopoint binutils bison build-essential \
-    bzip2 ccache clang cmake cpio curl device-tree-compiler flex gawk gettext gcc-multilib \
-    g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev \
-    libglib2.0-dev libgmp-dev libltdl-dev libmpc-dev libmpfr-dev libncurses-dev libpython3-dev \
-    libreadline-dev libssl-dev libtool libyaml-dev lld llvm lrzsz msmtp nano \
-    ninja-build p7zip p7zip-full patch pkgconf python3 python3-pip python3-ply python3-docutils \
-    python3-pyelftools qemu-utils re2c rsync scons squashfs-tools subversion swig texinfo \
-    unzip vim wget xmlto xxd zlib1g-dev zstd genisoimage \
-    libgnutls28-dev && \
-    bash -c \
-    'bash <(curl -s https://build-scripts.immortalwrt.org/init_build_environment.sh)' && \
+# 包清单唯一事实源：scripts/packages.txt
+# 构建脚本唯一样本：scripts/init_build_environment.sh（vendored，上游 commit 见 scripts/upstream.lock）
+COPY scripts/packages.txt scripts/init_build_environment.sh /tmp/
+COPY scripts/patches/ /tmp/patches/
+
+RUN apt-get install -y $(grep -vE '^[[:space:]]*(#|$)' /tmp/packages.txt | xargs) && \
+    for p in /tmp/patches/*.patch; do \
+      echo "applying ${p}"; \
+      patch --batch --forward /tmp/init_build_environment.sh < "${p}" || exit 1; \
+    done && \
+    bash /tmp/init_build_environment.sh && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-# Fix Complie Link
-RUN set -ex && \
-    # Search latest GCC version
-    LATEST_GCC=$(ls /usr/bin/gcc-* | grep -E 'gcc-[0-9]+$' | sort -V | tail -n1) && \
-    if [ -z "$LATEST_GCC" ]; then \
-    echo "ERROR: No GCC version found in /usr/bin"; \
-    exit 1; \
-    fi && \
-    # Get version number
-    GCC_VERSION=$(basename "$LATEST_GCC" | cut -d'-' -f2) && \
-    echo "Detected GCC version: $GCC_VERSION" && \
-    # Remove old links
-    rm -f /usr/bin/gcc /usr/bin/g++ /usr/bin/cc /usr/bin/c++ \
-    /usr/bin/gcc-ar /usr/bin/gcc-nm /usr/bin/gcc-ranlib && \
-    # Create new links
-    ln -s "$LATEST_GCC" /usr/bin/gcc && \
-    ln -s "/usr/bin/g++-$GCC_VERSION" /usr/bin/g++ && \
-    ln -s "/usr/bin/gcc-ar-$GCC_VERSION" /usr/bin/gcc-ar && \
-    ln -s "/usr/bin/gcc-nm-$GCC_VERSION" /usr/bin/gcc-nm && \
-    ln -s "/usr/bin/gcc-ranlib-$GCC_VERSION" /usr/bin/gcc-ranlib && \
-    ln -s /usr/bin/gcc /usr/bin/cc && \
-    ln -s /usr/bin/g++ /usr/bin/c++
 
 # Add User ImmortalWrt
 RUN useradd -m immortalwrt -s /bin/bash && \

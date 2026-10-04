@@ -1,0 +1,11 @@
+--- a/init_build_environment.sh
++++ b/init_build_environment.sh
+@@ -251,7 +251,7 @@
+ 	ln -svf "/usr/bin/g++" "/usr/bin/c++"
+ 	[ -e "/usr/include/asm" ] || ln -svf "/usr/include/$(gcc -dumpmachine)/asm" "/usr/include/asm"
+ 
+-	apt install -y $BPO_FLAG "clang-$LLVM_VERSION" "libclang-$LLVM_VERSION-dev" "lld-$LLVM_VERSION" "liblld-$LLVM_VERSION-dev" "llvm-$LLVM_VERSION"
++	apt install -y $BPO_FLAG "clang-$LLVM_VERSION" "libclang-$LLVM_VERSION-dev" "lld-$LLVM_VERSION" "liblld-$LLVM_VERSION-dev" "llvm-$LLVM_VERSION" "llvm-$LLVM_VERSION-dev"
+ 	for i in "/usr/lib/llvm-$LLVM_VERSION/bin"/*; do
+ 		ln -svf "$i" "/usr/bin/${i##*/}"
+ 	done

@@ -6,21 +6,26 @@ name: Docker Publish
 # documentation.
 
 on:
-  # schedule:
-  #   - cron: "30 12 * * *"
   push:
     branches: ["main"]
-    # Publish semver tags as releases.
+    # 历史 semver 风格 tag（bullseye 分支沿用）；CalVer tag 由本 workflow 自己创建
     tags: ["v*.*.*", "*-v*"]
   pull_request:
     branches: ["main"]
+  # 每月 1 日 04:00 UTC 的从零构建巡检（canary）：不推送、不建 tag，只负责发现漂移与损坏
+  schedule:
+    - cron: "0 4 1 * *"
   workflow_dispatch:
     inputs:
       tag:
-        description: '要构建的 Git 标签（例如 bullseye-v1.0）'
+        description: '要构建的 Git 标签（例如 bullseye-v1.0）；留空则按今天的日期发布'
         required: false
         type: string
         default: ''
+      canary:
+        description: '只做巡检（从零构建 + 冒烟 + 漂移 + CVE），不发布任何镜像'
+        type: boolean
+        default: false
 
 env:
   # Use docker.io for Docker Hub if empty
@@ -29,13 +34,22 @@ env:
   # github.repository as <account>/<repo>
   GHCR_IMAGE_NAME: ${{ github.repository }}
   HUB_IMAGE_NAME: ${{ vars.DOCKERHUB_ACCOUNT }}/${{ vars.DOCKERHUB_REPO }}
+  # 包清单守门的基线镜像名在步骤内计算：GHCR 要求仓库路径全小写，
+  # 而 github.repository 保留了大小写（Shuery-Shuai/...），直接引用会 404。
 
 jobs:
   build:
+    if: github.event_name != 'schedule' && !(github.event_name == 'workflow_dispatch' && inputs.canary)
     runs-on: ubuntu-latest
+    # 同一 ref 的发布串行化：避免两次 main 推送在同一窗口抢跑、互相覆盖 tag
+    concurrency:
+      group: docker-publish-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
-      contents: read
+      contents: write
       packages: write
+      # PR 上把 CI 证据报告（包清单 diff / 体积）作为评论发回 PR
+      pull-requests: write
       # This is used to complete the identity challenge
       # with sigstore/fulcio when running outside of PRs.
       id-token: write
@@ -45,34 +59,34 @@ jobs:
       # otherwise checkout the default branch.
       - name: Checkout tag if provided manually
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.tag != ''
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.inputs.tag }}
 
       # Checkout the repository at the default branch if no tag is provided manually.
       - name: Checkout repository (default)
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.tag == ''
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Install the cosign tool except on PR
       # https://github.com/sigstore/cosign-installer
       - name: Install cosign
         if: github.event_name != 'pull_request'
-        uses: sigstore/cosign-installer@v4.1.2
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          cosign-release: "v2.4.3"
+          cosign-release: "v3.1.3"
 
       # Set up BuildKit Docker container builder to be able to build
       # multi-platform images and export cache
       # https://github.com/docker/setup-buildx-action
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       # Login against a Docker registry except on PR
       # https://github.com/docker/login-action
       - name: Log into registry ${{ env.GHCR_REGISTRY }}
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ env.GHCR_REGISTRY }}
           username: ${{ github.actor }}
@@ -80,71 +94,204 @@ jobs:
 
       - name: Log into registry ${{ env.HUB_REGISTRY }}
         if: github.event_name!= 'pull_request'
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ env.HUB_REGISTRY }}
           username: ${{ vars.DOCKERHUB_ACCOUNT }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Generate extra tags from git tag for Docker metadata
-      - name: Generate extra tags
-        id: gen-tags
-        if: |
-          (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.tag != '')
+      # 计算本次发布的不可变 tag：CalVer bookworm-YYYY.MM.DD[.n]（同日多次发布追加序号）
+      # 由 tag 推送触发时直接沿用该 tag；由 main 推送或手动 dispatch（tag 留空）触发时按日期生成。
+      - name: 计算发布 tag
+        id: release
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         run: |
-          TAGS=""
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            TAG_NAME="${GITHUB_REF#refs/tags/}"
-            DISTRO="${TAG_NAME%-v*}"
-            if [[ "$DISTRO" != "$TAG_NAME" ]]; then
-              TAGS+=$'type=raw,value='"$DISTRO"$'\n'
-            fi
-            TAGS+=$'type=raw,value='"$TAG_NAME"
-          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            INPUT_TAG="${{ github.event.inputs.tag }}"
-            DISTRO="${INPUT_TAG%-v*}"
-            if [[ "$DISTRO" != "$INPUT_TAG" ]]; then
-              TAGS+=$'type=raw,value='"$DISTRO"$'\n'
-            fi
-            TAGS+=$'type=raw,value='"$INPUT_TAG"
+          set -euo pipefail
+          INPUT_TAG="${{ github.event.inputs.tag }}"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            NAME="${GITHUB_REF_NAME}"
+            IS_MAIN="false"
+          elif [ -n "${INPUT_TAG}" ]; then
+            NAME="${INPUT_TAG}"
+            IS_MAIN="false"
+          else
+            BASE="bookworm-$(date -u +%Y.%m.%d)"
+            EXISTING="$(git ls-remote --tags --refs origin | awk '{print $2}' | sed 's|refs/tags/||')"
+            NAME="$BASE"
+            n=0
+            while printf '%s\n' "$EXISTING" | grep -qx "$NAME"; do
+              n=$((n + 1))
+              NAME="$BASE.$n"
+            done
+            IS_MAIN="true"
           fi
-          echo 'extra_tags<<EOF' >> $GITHUB_OUTPUT
-          echo "$TAGS" >> $GITHUB_OUTPUT
-          echo 'EOF' >> $GITHUB_OUTPUT
+          ALIAS=""
+          case "$NAME" in
+            bookworm-*) ALIAS="bookworm" ;;
+            bullseye-*) ALIAS="bullseye" ;;
+            *-v*) ALIAS="${NAME%%-*}" ;;
+          esac
+          {
+            echo "name=$NAME"
+            echo "is_main=$IS_MAIN"
+            echo "extra_tags<<EOF"
+            echo "type=raw,value=$NAME"
+            if [ -n "$ALIAS" ]; then echo "type=raw,value=$ALIAS"; fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "本次发布 tag: ${NAME}（浮动别名: ${ALIAS:-无}）"
 
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
       - name: Extract Docker metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: |
             ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE_NAME }}
             ${{ env.HUB_REGISTRY }}/${{ env.HUB_IMAGE_NAME }}
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || github.event.inputs.tag == '') }}
-            ${{ steps.gen-tags.outputs.extra_tags }}
-            type=ref,event=tag,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=latest,enable=${{ steps.release.outputs.is_main == 'true' }}
+            ${{ steps.release.outputs.extra_tags }}
             type=ref,event=pr
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.description=用于构建 ImmortalWrt 固件编译的 Docker 环境。
             org.opencontainers.image.licenses=MIT
 
-      # Build and push Docker image with Buildx (don't push on PR)
-      # https://github.com/docker/build-push-action
-      - name: Build and push Docker image
-        id: build-and-push
-        uses: docker/build-push-action@v7
+      # 先在本地构建并冒烟：**任何路径（含发布）都必须先验证再推送**，
+      # 因此这里不推送、只 load；随后的推送构建命中同一份缓存，代价很小。
+      - name: 构建（本地，供验证）
+        id: verify-build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64
-          push: ${{ github.event_name != 'pull_request' }}
+          push: false
+          load: true
+          tags: immortalwrt-build-env:verify
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 冒烟测试
+        if: always()
+        run: |
+          if ! docker image inspect immortalwrt-build-env:verify >/dev/null 2>&1; then
+            echo "本地无待验证镜像（构建步骤未产出），跳过"
+            exit 0
+          fi
+          docker run --rm \
+            -v "$PWD/scripts/smoke-test.sh:/smoke-test.sh:ro" \
+            immortalwrt-build-env:verify \
+            bash /smoke-test.sh
+
+      # ---- 以下为 PR 上的证据步骤（docs/OPTIMIZATION.md §6、§7）----
+
+      - name: 包清单 (PR only)
+        if: always() && github.event_name == 'pull_request'
+        run: |
+          ID="${{ steps.verify-build.outputs.imageid }}"
+          if [ -z "$ID" ]; then
+            echo "构建未产出镜像，跳过包清单"
+            exit 0
+          fi
+          docker run --rm "$ID" \
+            dpkg-query -W -f='${Package}\t${Version}\n' | sort > packages-candidate.txt
+          printf '候选镜像包数: %s\n' "$(wc -l < packages-candidate.txt | tr -d ' ')"
+
+      - name: 包清单守门 vs 已发布镜像 (PR only)
+        if: always() && github.event_name == 'pull_request'
+        run: |
+          set -uo pipefail
+          {
+            echo "## CI 证据报告"
+            echo ""
+            echo "- 提交：\`${{ github.sha }}\`"
+            echo ""
+          } > ci-report.md
+          ID="${{ steps.verify-build.outputs.imageid }}"
+          if [ -z "$ID" ]; then
+            echo "构建未产出镜像，跳过包清单守门"
+            echo "跳过：构建未产出镜像。" >> ci-report.md
+            exit 0
+          fi
+          BASELINE_IMAGE="ghcr.io/$(printf '%s' "${{ github.repository }}" | tr '[:upper:]' '[:lower:]'):latest"
+          if ! docker pull "$BASELINE_IMAGE" >/dev/null 2>&1; then
+            echo "::warning::无法拉取 baseline 镜像 ${BASELINE_IMAGE}，跳过包清单守门"
+            {
+              echo "### 包清单 diff"
+              echo ""
+              echo "跳过：无法拉取 baseline 镜像 \`$BASELINE_IMAGE\`。"
+            } | tee -a ci-report.md >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          set -o pipefail
+          bash scripts/package-diff.sh "$BASELINE_IMAGE" "$ID" | tee -a ci-report.md
+
+      - name: 镜像体积报告 (PR only)
+        if: always() && github.event_name == 'pull_request'
+        run: |
+          set -uo pipefail
+          ID="${{ steps.verify-build.outputs.imageid }}"
+          if [ -z "$ID" ]; then
+            echo "构建未产出镜像，跳过体积报告"
+            exit 0
+          fi
+          UNCOMPRESSED="$(docker image inspect -f '{{.Size}}' "$ID")"
+          COMPRESSED="$(docker save "$ID" | gzip -6 | wc -c | tr -d ' ')"
+          {
+            echo "### 镜像体积（PR 构建）"
+            echo ""
+            echo "| 口径 | 数值 |"
+            echo "| --- | --- |"
+            echo "| 未压缩（docker inspect .Size） | $(numfmt --to=iec "$UNCOMPRESSED") |"
+            echo "| 整包 gzip 估算 | $(numfmt --to=iec "$COMPRESSED") |"
+            echo ""
+            echo "验收目标 ≤ 1000 MB 以注册表分层压缩合计为准（发布后核对）；此处仅作 PR 间可比基线。"
+          } | tee -a ci-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      # 把证据报告作为 PR 评论发布：CI 日志需要鉴权才能读取，评论可以匿名读，
+      # 便于会话/外部工具直接取用（同一条评论会被后续运行覆写，不会刷屏）。
+      - name: 发布 CI 证据报告到 PR (PR only)
+        # fork / Dependabot 的 PR 拿不到 pull-requests: write，评论会 403。
+        # 这类 PR 直接跳过评论（Step Summary 与 artifact 照常产出），并加 continue-on-error 兜底，
+        # 否则每周一的 Dependabot PR 都会显示一次假红。
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ ! -s ci-report.md ]; then
+            echo "无证据报告，跳过"
+            exit 0
+          fi
+          PR="${{ github.event.pull_request.number }}"
+          gh pr comment "$PR" --body-file ci-report.md --edit-last --create-if-none \
+            || gh pr comment "$PR" --body-file ci-report.md
+
+      - name: 上传 CI 证据产物 (PR only)
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-evidence-pr-${{ github.event.number }}
+          path: |
+            ci-report.md
+            packages-candidate.txt
+          retention-days: 30
+
+      # 推送构建：命中上面的缓存，只多出导出与推送的代价；SBOM attestation 在此生成。
+      - name: Build and push Docker image
+        id: build-and-push
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          sbom: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       # Sign the resulting Docker image digest except on PRs.
       # This will only write to the public Rekor transparency log when the Docker
@@ -160,3 +307,204 @@ jobs:
         # This step uses the identity token to provision an ephemeral certificate
         # against the sigstore community Fulcio instance.
         run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
+
+      # 签名后立刻验证：把"能签"与"能验"两端都锁在 CI 里，避免 README 里的验证命令成为空话
+      - name: 校验签名 (cosign verify)
+        if: ${{ github.event_name != 'pull_request' }}
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
+        run: |
+          set -uo pipefail
+          IDENTITY="^https://github.com/${GITHUB_REPOSITORY}/.github/workflows/.+@refs/(heads|tags)/.+$"
+          ISSUER="https://token.actions.githubusercontent.com"
+          FAILED=0
+          while IFS= read -r ref; do
+            [ -n "$ref" ] || continue
+            echo "verify ${ref}@${DIGEST}"
+            cosign verify "${ref}@${DIGEST}" \
+              --certificate-identity-regexp "$IDENTITY" \
+              --certificate-oidc-issuer "$ISSUER" >/dev/null || FAILED=1
+          done <<< "${TAGS}"
+          [ "$FAILED" -eq 0 ] || { echo "::error::cosign verify 失败"; exit 1; }
+
+      # 创建不可变 tag 与 GitHub Release（CalVer；tag 一旦发布永不重写）
+      - name: 创建不可变 tag 与 Release
+        if: steps.release.outputs.name != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          NAME="${{ steps.release.outputs.name }}"
+          DIGEST="${{ steps.build-and-push.outputs.digest }}"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "本次由 tag 推送触发：$NAME"
+          elif git rev-parse -q --verify "refs/tags/$NAME" >/dev/null 2>&1; then
+            echo "tag $NAME 已存在（可能是上一次部分发布），跳过创建"
+          else
+            git tag "$NAME"
+            git push origin "refs/tags/$NAME"
+          fi
+          REPO_LC="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          SIZE_LINE="(本地验证镜像不可用，未测量)"
+          if docker image inspect immortalwrt-build-env:verify >/dev/null 2>&1; then
+            U="$(docker image inspect -f '{{.Size}}' immortalwrt-build-env:verify)"
+            if docker save immortalwrt-build-env:verify -o /tmp/rel.img.tar \
+              && mkdir -p /tmp/rel.img && tar -xf /tmp/rel.img.tar -C /tmp/rel.img; then
+            TOTAL=0
+            if compgen -G "/tmp/rel.img/*/layer.tar" >/dev/null; then
+              FILES=$(find /tmp/rel.img -name layer.tar)
+            else
+              FILES=$(find /tmp/rel.img/blobs/sha256 -type f -size +100k 2>/dev/null)
+            fi
+            for f in $FILES; do
+              S="$(gzip -6 -c "$f" | wc -c | tr -d ' ')"
+              TOTAL=$((TOTAL + S))
+            done
+            SIZE_LINE="未压缩 $(numfmt --to=iec "$U") / 分层 gzip 合计 $(numfmt --to=iec "$TOTAL")"
+            else
+              SIZE_LINE="(体积测量失败，已跳过；不影响发布)"
+            fi
+          fi
+          {
+            echo "不可变镜像 tag：\`$NAME\`（同 tag 永不重写；需要完全可复现请用 digest 引用）"
+            echo ""
+            echo "- digest：\`$DIGEST\`"
+            echo "- 体积：${SIZE_LINE}"
+            echo "- 平台：linux/amd64"
+            echo "- 上游构建脚本：\`$(grep '^COMMIT=' scripts/upstream.lock | cut -d= -f2)\`"
+            echo "- 包清单：\`scripts/packages.txt\`（构建产物清单见对应 PR 的 CI 证据报告）"
+            echo ""
+            echo "### 验证签名"
+            echo ""
+            echo '```sh'
+            echo "cosign verify ghcr.io/${REPO_LC}@${DIGEST} \\"
+            echo "  --certificate-identity-regexp 'https://github.com/${GITHUB_REPOSITORY}/.github/workflows/.*' \\"
+            echo "  --certificate-oidc-issuer https://token.actions.githubusercontent.com"
+            echo '```'
+          } > release-notes.md
+          if gh release view "$NAME" >/dev/null 2>&1; then
+            echo "Release $NAME 已存在，改为更新说明"
+            gh release edit "$NAME" --notes-file release-notes.md
+          else
+            gh release create "$NAME" --title "$NAME" --notes-file release-notes.md
+          fi
+
+  # 每月一次的从零构建巡检：完全不推送，只回答两个问题——
+  #   1. 这套构建今天还能从零跑通吗（远端源是否消失或改行为）？
+  #   2. 上游脚本是否已经漂移（vendor 版本是否需要人工同步）？
+  # 失败或漂移都会开（或更新）一个 Issue。
+  canary:
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.canary)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: 从零构建（no-cache，不推送）
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          load: true
+          no-cache: true
+          tags: immortalwrt-build-env:canary
+
+      - name: 冒烟测试
+        id: smoke
+        run: |
+          docker run --rm \
+            -v "$PWD/scripts/smoke-test.sh:/smoke-test.sh:ro" \
+            immortalwrt-build-env:canary bash /smoke-test.sh
+
+      - name: 上游脚本漂移检查
+        id: drift
+        if: always()
+        run: |
+          set -uo pipefail
+          LOCKED="$(grep '^COMMIT=' scripts/upstream.lock | cut -d= -f2)"
+          HEAD="$(git ls-remote https://github.com/immortalwrt/build-scripts.git refs/heads/master | cut -f1)"
+          printf '锁定 commit: %s\n上游 commit: %s\n' "$LOCKED" "$HEAD"
+          if [ -z "$HEAD" ]; then
+            echo "::error::无法获取上游 master HEAD，本次未做比较——不得当成无漂移"
+            echo "drifted=unknown" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          if [ "$LOCKED" != "$HEAD" ]; then
+            echo "drifted=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "drifted=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: CVE 扫描（只报告，不阻断）
+        if: always() && steps.build.outcome == 'success'
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: immortalwrt-build-env:canary
+          format: table
+          severity: CRITICAL,HIGH
+          scanners: vuln
+          exit-code: "0"
+          output: trivy-report.txt
+
+      # 每月一条滚动 Issue：把"还能从零构建吗 / 上游漂移了吗 / CVE 有多少"放在同一处，
+      # 否则报告只会躺在流水线里无人查看。CVE 仅提示，不阻断任何发布。
+      - name: 汇总月度巡检报告（滚动 Issue）
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          case "${{ steps.drift.outputs.drifted }}" in
+            true) DRIFT="是（需要人工同步 scripts/init_build_environment.sh，流程见 scripts/README.md）" ;;
+            unknown) DRIFT="未知（上游 HEAD 获取失败，本次未比较）" ;;
+            *) DRIFT="否" ;;
+          esac
+          CRIT="n/a"
+          HIGH="n/a"
+          if [ -s trivy-report.txt ]; then
+            CRIT="$(grep -o 'CRITICAL: [0-9]*' trivy-report.txt | awk '{s+=$2} END {print s+0}')"
+            HIGH="$(grep -o 'HIGH: [0-9]*' trivy-report.txt | awk '{s+=$2} END {print s+0}')"
+          fi
+          {
+            echo "## 巡检结果（$(date -u +%Y-%m-%d)）"
+            echo ""
+            echo "| 检查项 | 结果 |"
+            echo "| --- | --- |"
+            echo "| 从零构建（no-cache） | ${{ steps.build.outcome || 'skipped' }} |"
+            echo "| 冒烟测试 | ${{ steps.smoke.outcome || 'skipped' }} |"
+            echo "| 上游脚本漂移 | ${DRIFT} |"
+            echo "| CVE（CRITICAL / HIGH） | ${CRIT} / ${HIGH} |"
+            echo ""
+            echo "运行：${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo ""
+            echo "锁定的上游 commit 见 \`scripts/upstream.lock\`；CVE 结果仅作提示，不阻断发布。"
+          } > canary-report.md
+          if [ -s trivy-report.txt ]; then
+            {
+              echo ""
+              echo "<details><summary>trivy 扫描结果（CRITICAL / HIGH）</summary>"
+              echo ""
+              echo '```'
+              head -n 80 trivy-report.txt
+              echo '```'
+              echo ""
+              echo "</details>"
+            } >> canary-report.md
+          fi
+          NUM="$(gh issue list --state open --limit 100 --json number,title \
+            --jq '[.[] | select(.title | startswith("[canary]"))][0].number // empty')"
+          if [ -n "$NUM" ]; then
+            gh issue comment "$NUM" --body-file canary-report.md
+          else
+            gh issue create --title "[canary] 构建环境巡检（月度滚动报告）" --body-file canary-report.md
+          fi
