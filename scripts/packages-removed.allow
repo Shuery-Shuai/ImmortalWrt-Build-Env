@@ -534,3 +534,13 @@ libclang*14*
 libllvm14
 lld-14*
 llvm-14*
+
+# Debian 的未版本化元包：clang / lld / llvm / llvm-runtime 都只是指向 LLVM 14 全套的入口，
+# 已改用上游脚本安装的 LLVM 18（/usr/bin 下由脚本软链），故一并移除。
+clang
+lld
+llvm
+llvm-runtime
+# curl 的 NSS 后端变体与 NSS PEM 插件：标准 curl 用 libcurl4，编译链不需要 NSS 后端。
+libcurl3-nss
+nss-plugin-pem
