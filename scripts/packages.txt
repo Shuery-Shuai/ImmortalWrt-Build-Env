@@ -18,6 +18,9 @@ curl
 ca-certificates
 
 # --- 脚本不安装、但本镜像必须有的包 ---
+# patch：Dockerfile 在运行上游脚本**之前**就要用 patch 应用 scripts/patches/*.patch，
+#   而脚本要到自己的安装步骤才装 patch——因此它属于 bootstrap 例外，不能算重复项。
+patch
 # openssh-client：git 的 Recommends，缺了它 `git clone git@…` 与 ssh 子模块会失败（CI 实测发现）。
 openssh-client
 # gcc-multilib / g++-multilib：与脚本安装的 gcc-12-multilib / g++-12-multilib 等效，
