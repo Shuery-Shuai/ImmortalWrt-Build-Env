@@ -149,36 +149,38 @@ jobs:
             org.opencontainers.image.description=用于构建 ImmortalWrt 固件编译的 Docker 环境。
             org.opencontainers.image.licenses=MIT
 
-      # Build and push Docker image with Buildx (don't push on PR).
-      # 在 PR 上改为 --load 到本地 runner，供后续冒烟/包清单/体积检查使用。
-      - name: Build and push Docker image
-        id: build-and-push
+      # 先在本地构建并冒烟：**任何路径（含发布）都必须先验证再推送**，
+      # 因此这里不推送、只 load；随后的推送构建命中同一份缓存，代价很小。
+      - name: 构建（本地，供验证）
+        id: verify-build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64
-          push: ${{ github.event_name != 'pull_request' }}
-          load: ${{ github.event_name == 'pull_request' }}
-          sbom: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          push: false
+          load: true
+          tags: immortalwrt-build-env:verify
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # ---- 以下为 PR 上的证据步骤（docs/OPTIMIZATION.md §6、§7）----
-
-      - name: 冒烟测试 (PR only)
-        if: github.event_name == 'pull_request'
+      - name: 冒烟测试
+        if: always()
         run: |
+          if ! docker image inspect immortalwrt-build-env:verify >/dev/null 2>&1; then
+            echo "本地无待验证镜像（构建步骤未产出），跳过"
+            exit 0
+          fi
           docker run --rm \
             -v "$PWD/scripts/smoke-test.sh:/smoke-test.sh:ro" \
-            "${{ steps.build-and-push.outputs.imageid }}" \
+            immortalwrt-build-env:verify \
             bash /smoke-test.sh
+
+      # ---- 以下为 PR 上的证据步骤（docs/OPTIMIZATION.md §6、§7）----
 
       - name: 包清单 (PR only)
         if: always() && github.event_name == 'pull_request'
         run: |
-          ID="${{ steps.build-and-push.outputs.imageid }}"
+          ID="${{ steps.verify-build.outputs.imageid }}"
           if [ -z "$ID" ]; then
             echo "构建未产出镜像，跳过包清单"
             exit 0
@@ -197,7 +199,7 @@ jobs:
             echo "- 提交：\`${{ github.sha }}\`"
             echo ""
           } > ci-report.md
-          ID="${{ steps.build-and-push.outputs.imageid }}"
+          ID="${{ steps.verify-build.outputs.imageid }}"
           if [ -z "$ID" ]; then
             echo "构建未产出镜像，跳过包清单守门"
             echo "跳过：构建未产出镜像。" >> ci-report.md
@@ -219,7 +221,7 @@ jobs:
         if: always() && github.event_name == 'pull_request'
         run: |
           set -uo pipefail
-          ID="${{ steps.build-and-push.outputs.imageid }}"
+          ID="${{ steps.verify-build.outputs.imageid }}"
           if [ -z "$ID" ]; then
             echo "构建未产出镜像，跳过体积报告"
             exit 0
@@ -261,6 +263,20 @@ jobs:
             ci-report.md
             packages-candidate.txt
           retention-days: 30
+
+      # 推送构建：命中上面的缓存，只多出导出与推送的代价；SBOM attestation 在此生成。
+      - name: Build and push Docker image
+        id: build-and-push
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          sbom: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
 
       # Sign the resulting Docker image digest except on PRs.
       # This will only write to the public Rekor transparency log when the Docker
