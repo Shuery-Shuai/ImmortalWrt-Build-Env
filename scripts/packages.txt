@@ -1,9 +1,9 @@
 # 本镜像"显式要求"的包清单 —— 唯一事实源（Dockerfile 只负责读取本文件）。
 #
 # 规则（详见 docs/OPTIMIZATION.md §5 / §6）：
-# 1. 上游 vendored 脚本（scripts/init_build_environment.sh）会安装的包，不应在这里重复列出；
-#    本文件目前是原 Dockerfile 内联清单的逐字提取（含与上游重复项），去重按"先证明再删"在步骤②执行。
-# 2. 例外：**脚本自身在安装任何东西之前就要用到的工具必须保留**，否则脚本会先失败——见下方 bootstrap 段。
+# 1. 上游 vendored 脚本（scripts/init_build_environment.sh）会安装的包，不在本文件重复列出；
+#    §5「消除两份清单重叠」已执行：62 项重复条目已移除。
+# 2. 例外：**脚本自身在安装任何东西之前就要用到的工具必须保留**，否则脚本会先失败——见 bootstrap 段。
 # 3. 删除任何包都需要证据：dpkg 包清单 diff 报告（旧镜像 vs 新镜像）+ 冒烟测试通过。
 
 # --- 基础与权限 ---
@@ -11,26 +11,29 @@ sudo
 bash
 
 # --- bootstrap（刻意例外：脚本自身在安装任何东西之前就要用它们）---
-# 脚本在第 104 行 check_network 起就调用 curl，并在 update_apt_source 中用它拉取
-#     第三方源与 GPG key；此时脚本自己的 apt 安装尚未开始。ca-certificates 是这些 HTTPS 请求的前提，
-#     不能依赖 curl 的 Recommends（步骤②开启 --no-install-recommends 后会消失）。 ---
+# 脚本在第 104 行 check_network 起就调用 curl，并在 update_apt_source 中用它拉取第三方源与
+# GPG key；此时脚本自己的 apt 安装尚未开始。ca-certificates 是这些 HTTPS 请求的前提，
+# 不能依赖 curl 的 Recommends（--no-install-recommends 会移除它）。
 curl
 ca-certificates
 
-# --- 我们**显式要求**、且上游 vendored 脚本不会安装的包 ---
-# 与上游脚本重复的条目已移除（§5「消除两份清单重叠」）；下面这些是脚本不装、
-# 但本镜像必须有的：见各段注释。bootstrap 段（curl/ca-certificates）是刻意的例外。
-clang
+# --- 脚本不安装、但本镜像必须有的包 ---
+# openssh-client：git 的 Recommends，缺了它 `git clone git@…` 与 ssh 子模块会失败（CI 实测发现）。
+openssh-client
+# gcc-multilib / g++-multilib：与脚本安装的 gcc-12-multilib / g++-12-multilib 等效，
+#   刻意保留，以便脚本安装路径变化时仍有 multilib 工具链。
 gcc-multilib
 g++-multilib
+# libgmp-dev / libgnutls28-dev：脚本用的是过渡名 libgmp3-dev / gnutls-dev（由这两个包 Provides），
+#   这里用正式名显式声明。
 libgmp-dev
-lld
-llvm
 libgnutls28-dev
-
-# --- 显式补回的“承重” Recommends（关闭 Recommends 后不再自动带入，但承担实际功能） ---
-# llvm-18-dev 不在此清单：它只存在于 apt.llvm.org，而该源由上游脚本在运行中才配置——
-#   写在这里会让构建期报 "Unable to locate package" 并以 exit 100 失败（已由 CI 实测确认）。
-#   改由 scripts/patches/0002-add-llvm-dev.patch 在脚本的 LLVM 安装行上补回。
 # qemu-block-extra：qemu-img 的额外块驱动（vmdk/vdi 等）；x86 目标生成 VMware/VirtualBox 镜像时用到。
 qemu-block-extra
+
+# --- 刻意移除（有实测依据）---
+# llvm-18-dev：只存在于 apt.llvm.org，而该源由脚本在运行中才配置；写在这里会让构建期
+#   报 "Unable to locate package" 并以 exit 100 失败（CI 实测确认）。改由
+#   scripts/patches/0002-add-llvm-dev.patch 在脚本的 LLVM 安装行补回。
+# clang / lld / llvm：Debian 自带的 14 全套，与脚本安装的 LLVM 18 重复
+#   （脚本已把 /usr/lib/llvm-18/bin/* 软链进 /usr/bin；CI 实测确认移除后冒烟仍通过）。

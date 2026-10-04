@@ -499,3 +499,38 @@ xfonts-encodings
 xfonts-utils
 xkb-data
 zip
+
+# 上游 Recommends 链里的桌面/服务组件（systemd 栈、图形库、locale 与文档工具），容器内无用途。
+# 「移除 systemd 栈不影响 sudo」已由冒烟断言 sudo -n true 实测确认（该断言在本次移除后仍通过）。
+dbus-user-session
+iso-codes
+libcbor0.8
+libdrm-common
+libdrm2
+libegl-mesa0
+libegl1
+libfdisk1
+libfido2-1
+libgbm1
+libgles2
+libip4tc2
+libkmod2
+libnss-systemd
+libpam-systemd
+libpixman-1-0
+libsystemd-shared
+libwayland-server0
+systemd
+systemd-sysv
+systemd-timesyncd
+teckit
+tex-gyre
+xauth
+zutty
+
+# Debian 自带的 LLVM/Clang 14 全套：与上游脚本安装的 LLVM 18 重复（脚本把 llvm-18/bin/* 软链进 /usr/bin）。
+clang-14*
+libclang*14*
+libllvm14
+lld-14*
+llvm-14*

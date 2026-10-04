@@ -67,6 +67,7 @@
 - **Recommends 处置（已量化）**：以本镜像包集合为种子，Debian bookworm 的 Depends 闭包为 484 包 / 2.2 GB，Depends + Recommends 闭包为 1042 包 / 4.8 GB——**仅 Recommends 就引入 558 包 / 2.6 GB**。因此全局关闭 `APT::Install-Recommends`（`scripts/apt-no-recommends.conf`），并把经审计判定为承重的推荐包显式补回：`qemu-block-extra` 在 `scripts/packages.txt`；`llvm-18-dev` 因只存在于 apt.llvm.org（脚本运行中才配置该源）而由 `scripts/patches/0002-add-llvm-dev.patch` 补回。
 - **文档与本地化**：用 `dpkg` 的 `path-exclude` 在安装期就不写入 `/usr/share/doc`、`man`、`groff`、`info`、`locale`（保留版权文件与 C/en* locale），而不是装完再删——省的是真实层体积（`scripts/dpkg-nodoc.conf`）。
 - **移除清单已依据分析预登记**：`scripts/packages-removed.allow` 由 2026-10-04 的依赖分析生成（预测 494 个 Recommends-only 包 / 约 2.0 GB，其中 texlive 家族用 `texlive-*` 通配）。CI 的真实 diff 才是权威：漏登记会让 CI 失败并逐个报出，多登记无害；该文件不得包含 `scripts/packages.txt` 里显式要求的任何包（已自检）。
+- **承重项按实测补齐 / 冗余项按实测移除**（依据为 CI 的包清单 diff）：`openssh-client`（`git` 的 Recommends，缺了它 `git clone git@…` 与 ssh 子模块会失败）显式加回 `scripts/packages.txt`；反之 Debian 自带的 LLVM/Clang 14 全套与上游脚本安装的 LLVM 18 重复（脚本已把 `llvm-18/bin/*` 软链进 `/usr/bin`），`systemd` 栈与图形库等 Recommends 在容器内无用途——这些移除逐族登记在 allow 文件中，其中「移除 systemd 栈不影响 sudo」由冒烟断言 `sudo -n true` 实测确认。
 - **首次以本改动跑 CI 仍可能失败**：守门机制要求被移除的包逐个登记，第一次运行会用真实 diff 清单告诉我们到底少了什么，登记后才允许合并。这是设计行为（先证明再删），不是故障。
 - 测量口径：以 CI（GitHub runner）的构建时长与注册表压缩体积为准（本机 Apple Silicon 构建走模拟，不具代表性）。
 
