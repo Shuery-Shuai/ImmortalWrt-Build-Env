@@ -1,25 +1,21 @@
-ARG DEBIAN_TAG=bookworm
+# 基础镜像按 digest 固定以保证可复现；升级由 Dependabot 每周一提 PR（见 .github/dependabot.yml）。
+# 更换 codename（例如 trixie）属于破坏性变更，走 docs/OPTIMIZATION.md §9 的升级触发器流程。
+FROM debian:bookworm@sha256:f37a335e82bca302e955fa39f9dfe28f1be618f016f8a2b56318e5a5111afc26
 
-FROM debian:$DEBIAN_TAG
+LABEL org.opencontainers.image.base.name="docker.io/library/debian:bookworm" \
+      org.opencontainers.image.base.digest="sha256:f37a335e82bca302e955fa39f9dfe28f1be618f016f8a2b56318e5a5111afc26"
 
 # Prepare System Requirements
 RUN dpkg --add-architecture i386 && \
     apt-get update && \
     apt-get full-upgrade -y
 
-RUN apt-get install -y \
-    sudo bash \
-    ack asciidoc autoconf automake autopoint binutils bison build-essential \
-    bzip2 ccache clang cmake cpio curl device-tree-compiler flex gawk gettext gcc-multilib \
-    g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev \
-    libglib2.0-dev libgmp-dev libltdl-dev libmpc-dev libmpfr-dev libncurses-dev libpython3-dev \
-    libreadline-dev libssl-dev libtool libyaml-dev lld llvm lrzsz msmtp nano \
-    ninja-build p7zip p7zip-full patch pkgconf python3 python3-pip python3-ply python3-docutils \
-    python3-pyelftools qemu-utils re2c rsync scons squashfs-tools subversion swig texinfo \
-    unzip vim wget xmlto xxd zlib1g-dev zstd genisoimage \
-    libgnutls28-dev && \
-    bash -c \
-    'bash <(curl -s https://build-scripts.immortalwrt.org/init_build_environment.sh)' && \
+# 包清单唯一事实源：scripts/packages.txt
+# 构建脚本唯一样本：scripts/init_build_environment.sh（vendored，上游 commit 见 scripts/upstream.lock）
+COPY scripts/packages.txt scripts/init_build_environment.sh /tmp/
+
+RUN apt-get install -y $(grep -vE '^[[:space:]]*(#|$)' /tmp/packages.txt | xargs) && \
+    bash /tmp/init_build_environment.sh && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 

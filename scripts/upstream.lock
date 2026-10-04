@@ -1,0 +1,11 @@
+# Vendored 上游构建脚本的版本锁
+#
+# 该文件被 Dockerfile COPY 进镜像并以 root 身份执行，因此采用 vendored（随仓库固定）而不是构建期远端拉取。
+# 同步流程见 scripts/README.md；检测上游变化由 CI 的每月 canary 负责。
+
+REPO=https://github.com/immortalwrt/build-scripts
+BRANCH=master
+COMMIT=04a39ca00d2cd6895c84e1c0670bc719cbd8d9fb
+FILE=init_build_environment.sh
+SHA256=85f4b2c2aa16f8178b57250f5d2bcf4a2e0707c6b569a3b07510f41fc6185dd8
+FETCHED=2026-10-04
