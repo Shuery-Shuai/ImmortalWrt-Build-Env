@@ -185,7 +185,7 @@ jobs:
             exit 0
           fi
           if ! docker pull "$BASELINE_IMAGE" >/dev/null 2>&1; then
-            echo "::warning::无法拉取 baseline 镜像 $BASELINE_IMAGE，跳过包清单守门"
+            echo "::warning::无法拉取 baseline 镜像 ${BASELINE_IMAGE}，跳过包清单守门"
             {
               echo "### 包清单 diff"
               echo ""
