@@ -9,6 +9,9 @@ LABEL org.opencontainers.image.base.name="docker.io/library/debian:bookworm" \
 # 必须在第一个 apt 操作之前生效，因此放在这里而不是 install 层的末尾。
 COPY scripts/apt-no-recommends.conf /etc/apt/apt.conf.d/99immortalwrt-build-env
 COPY scripts/dpkg-nodoc.conf /etc/dpkg/dpkg.cfg.d/01immortalwrt-build-env-nodoc
+# bookworm-backports 源：上游脚本假设它存在（只在中国网络分支写入），否则 LLVM 18 / Node / Go
+# 的安装会静默失败——详见 scripts/apt-backports.list 的说明（CI 实测确认）。
+COPY scripts/apt-backports.list /etc/apt/sources.list.d/bookworm-backports.list
 
 # Prepare System Requirements
 RUN dpkg --add-architecture i386 && \

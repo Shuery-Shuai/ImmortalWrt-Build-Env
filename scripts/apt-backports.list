@@ -1,0 +1,12 @@
+# bookworm-backports 源。
+#
+# 为什么需要它：上游脚本在「非中国网络」分支不会写入该源，却在执行
+#   apt update -y -t bookworm-backports
+#   apt full-upgrade -y -t bookworm-backports
+#   apt install -y -t bookworm-backports nodejs yarn / golang-1.25-go / clang-18 ...
+# 这些调用会因目标发行版不存在而失败；而 apt update 失败意味着刚配置好的第三方源
+# （apt.llvm.org、nodesource、yarn、golang PPA）从未刷新列表，于是 LLVM 18 / Node / Go
+# 全部装不上——脚本没有 set -e，所以它「成功」退出了。
+#
+# 该问题由 CI 冒烟测试实测确认（clang 为 14、node 为空、go 缺失），且已发布镜像同样存在。
+deb http://deb.debian.org/debian bookworm-backports main contrib non-free non-free-firmware
