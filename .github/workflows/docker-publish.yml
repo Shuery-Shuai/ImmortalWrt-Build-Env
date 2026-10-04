@@ -378,8 +378,22 @@ jobs:
             echo "drifted=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: 失败或漂移时开 Issue
-        if: failure() || steps.drift.outputs.drifted == 'true'
+      - name: CVE 扫描（只报告，不阻断）
+        if: always() && steps.build.outcome == 'success'
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: immortalwrt-build-env:canary
+          format: table
+          severity: CRITICAL,HIGH
+          scanners: vuln
+          exit-code: "0"
+          output: trivy-report.txt
+
+      # 每月一条滚动 Issue：把"还能从零构建吗 / 上游漂移了吗 / CVE 有多少"放在同一处，
+      # 否则报告只会躺在流水线里无人查看。CVE 仅提示，不阻断任何发布。
+      - name: 汇总月度巡检报告（滚动 Issue）
+        if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -388,19 +402,41 @@ jobs:
           if [ "${{ steps.drift.outputs.drifted }}" = "true" ]; then
             DRIFT="是（需要人工同步 scripts/init_build_environment.sh，流程见 scripts/README.md）"
           fi
+          CRIT="n/a"
+          HIGH="n/a"
+          if [ -s trivy-report.txt ]; then
+            CRIT="$(grep -o 'CRITICAL: [0-9]*' trivy-report.txt | awk '{s+=$2} END {print s+0}')"
+            HIGH="$(grep -o 'HIGH: [0-9]*' trivy-report.txt | awk '{s+=$2} END {print s+0}')"
+          fi
           {
-            echo "## 巡检结果"
+            echo "## 巡检结果（$(date -u +%Y-%m-%d)）"
             echo ""
-            echo "- 运行：${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            echo "- 从零构建：${{ steps.build.outcome || 'skipped' }}"
-            echo "- 冒烟测试：${{ steps.smoke.outcome || 'skipped' }}"
-            echo "- 上游脚本漂移：${DRIFT}"
+            echo "| 检查项 | 结果 |"
+            echo "| --- | --- |"
+            echo "| 从零构建（no-cache） | ${{ steps.build.outcome || 'skipped' }} |"
+            echo "| 冒烟测试 | ${{ steps.smoke.outcome || 'skipped' }} |"
+            echo "| 上游脚本漂移 | ${DRIFT} |"
+            echo "| CVE（CRITICAL / HIGH） | ${CRIT} / ${HIGH} |"
             echo ""
-            echo "锁定的上游 commit 见 \`scripts/upstream.lock\`。"
+            echo "运行：${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo ""
+            echo "锁定的上游 commit 见 \`scripts/upstream.lock\`；CVE 结果仅作提示，不阻断发布。"
           } > canary-report.md
+          if [ -s trivy-report.txt ]; then
+            {
+              echo ""
+              echo "<details><summary>trivy 扫描结果（CRITICAL / HIGH）</summary>"
+              echo ""
+              echo '```'
+              head -n 80 trivy-report.txt
+              echo '```'
+              echo ""
+              echo "</details>"
+            } >> canary-report.md
+          fi
           NUM="$(gh issue list --state open --search 'in:title canary 构建环境巡检' --json number --jq '.[0].number // empty')"
           if [ -n "$NUM" ]; then
             gh issue comment "$NUM" --body-file canary-report.md
           else
-            gh issue create --title "[canary] 构建环境巡检失败或上游漂移" --body-file canary-report.md
+            gh issue create --title "[canary] 构建环境巡检（月度滚动报告）" --body-file canary-report.md
           fi
