@@ -18,6 +18,10 @@ curl
 ca-certificates
 
 # --- 脚本不安装、但本镜像必须有的包 ---
+# qemu-utils：必须显式列出，否则 backports 的 qemu-block-extra 会走它的备选项
+#   `qemu-system-any | qemu-utils` 的第一个分支，把整套 QEMU 系统模拟器拖进来
+#   （CI 实测：去重后 +53 包 / +72 MB，qemu-system-x86 及其 SPICE/GStreamer 依赖）。
+qemu-utils
 # patch：Dockerfile 在运行上游脚本**之前**就要用 patch 应用 scripts/patches/*.patch，
 #   而脚本要到自己的安装步骤才装 patch——因此它属于 bootstrap 例外，不能算重复项。
 patch
