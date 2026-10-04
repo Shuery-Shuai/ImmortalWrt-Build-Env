@@ -119,6 +119,8 @@
 | ~~Dockerfile 的 `Fix Complie Link` 层与上游脚本软链逻辑重复~~ | ✅ 已闭环 | 冒烟已断言 `cc`/`gcc` 与 `c++`/`g++` 一致性后，按"先证明再删"删除该层（脚本自身会 `ln -svf` gcc/g++/gcc-ar/gcc-nm/gcc-ranlib 与 c++；`cc` 由 Debian alternatives 提供），由 CI 冒烟与包清单守门验证 |
 | `curl` 必须显式留在 `scripts/packages.txt`（脚本在安装任何东西之前就要用它），`ca-certificates` 同理 | 缺失会让脚本所有 HTTPS 拉取失败 | 已在步骤①显式列出并在清单内注释原因（`--no-install-recommends` 会移除 curl 的 Recommends） |
 
+| `workflow_dispatch` 带 tag 输入时会重推该 tag 的镜像（可能覆盖已发布 tag） | 与「已发布 tag 永不重写」存在张力 | 已加 job 级 `concurrency` 串行化；该路径仅供维护者有意重建（bullseye 线已冻结，正常无需使用）。若要彻底禁止，需查询注册表并拒绝已存在的 tag——按 YAGNI 暂不做 |
+
 ## 11. 风险与对策
 
 | 风险                                     | 对策                                                                     |
