@@ -331,6 +331,8 @@ jobs:
           DIGEST="${{ steps.build-and-push.outputs.digest }}"
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             echo "本次由 tag 推送触发：$NAME"
+          elif git rev-parse -q --verify "refs/tags/$NAME" >/dev/null 2>&1; then
+            echo "tag $NAME 已存在（可能是上一次部分发布），跳过创建"
           else
             git tag "$NAME"
             git push origin "refs/tags/$NAME"
@@ -369,7 +371,12 @@ jobs:
             echo "  --certificate-oidc-issuer https://token.actions.githubusercontent.com"
             echo '```'
           } > release-notes.md
-          gh release create "$NAME" --title "$NAME" --notes-file release-notes.md
+          if gh release view "$NAME" >/dev/null 2>&1; then
+            echo "Release $NAME 已存在，改为更新说明"
+            gh release edit "$NAME" --notes-file release-notes.md
+          else
+            gh release create "$NAME" --title "$NAME" --notes-file release-notes.md
+          fi
 
   # 每月一次的从零构建巡检：完全不推送，只回答两个问题——
   #   1. 这套构建今天还能从零跑通吗（远端源是否消失或改行为）？
