@@ -29,6 +29,8 @@ env:
   # github.repository as <account>/<repo>
   GHCR_IMAGE_NAME: ${{ github.repository }}
   HUB_IMAGE_NAME: ${{ vars.DOCKERHUB_ACCOUNT }}/${{ vars.DOCKERHUB_REPO }}
+  # PR 上的包清单守门基线：上一版已发布镜像
+  BASELINE_IMAGE: ghcr.io/${{ github.repository }}:latest
 
 jobs:
   build:
@@ -132,8 +134,8 @@ jobs:
             org.opencontainers.image.description=用于构建 ImmortalWrt 固件编译的 Docker 环境。
             org.opencontainers.image.licenses=MIT
 
-      # Build and push Docker image with Buildx (don't push on PR)
-      # https://github.com/docker/build-push-action
+      # Build and push Docker image with Buildx (don't push on PR).
+      # 在 PR 上改为 --load 到本地 runner，供后续冒烟/包清单/体积检查使用。
       - name: Build and push Docker image
         id: build-and-push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -141,10 +143,67 @@ jobs:
           context: .
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # ---- 以下为 PR 上的证据步骤（docs/OPTIMIZATION.md §6、§7）----
+
+      - name: 冒烟测试 (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          docker run --rm \
+            -v "$PWD/scripts/smoke-test.sh:/smoke-test.sh:ro" \
+            "${{ steps.build-and-push.outputs.imageid }}" \
+            bash /smoke-test.sh
+
+      - name: 包清单 (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          docker run --rm "${{ steps.build-and-push.outputs.imageid }}" \
+            dpkg-query -W -f='${Package}\t${Version}\n' | sort > packages-candidate.txt
+          printf '候选镜像包数: %s\n' "$(wc -l < packages-candidate.txt | tr -d ' ')"
+
+      - name: 包清单守门 vs 已发布镜像 (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          if ! docker pull "$BASELINE_IMAGE" >/dev/null 2>&1; then
+            echo "::warning::无法拉取 baseline 镜像 $BASELINE_IMAGE，跳过包清单守门"
+            {
+              echo "### 包清单 diff"
+              echo ""
+              echo "跳过：无法拉取 baseline 镜像 \`$BASELINE_IMAGE\`。"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          bash scripts/package-diff.sh "$BASELINE_IMAGE" "${{ steps.build-and-push.outputs.imageid }}"
+
+      - name: 镜像体积报告 (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          ID="${{ steps.build-and-push.outputs.imageid }}"
+          UNCOMPRESSED="$(docker image inspect -f '{{.Size}}' "$ID")"
+          COMPRESSED="$(docker save "$ID" | gzip -6 | wc -c | tr -d ' ')"
+          {
+            echo "### 镜像体积（PR 构建）"
+            echo ""
+            echo "| 口径 | 数值 |"
+            echo "| --- | --- |"
+            echo "| 未压缩（docker inspect .Size） | $(numfmt --to=iec "$UNCOMPRESSED") |"
+            echo "| 整包 gzip 估算 | $(numfmt --to=iec "$COMPRESSED") |"
+            echo ""
+            echo "验收目标 ≤ 1000 MB 以注册表分层压缩合计为准（发布后核对）；此处仅作 PR 间可比基线。"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 上传包清单产物 (PR only)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: packages-pr-${{ github.event.number }}
+          path: packages-candidate.txt
+          retention-days: 30
 
       # Sign the resulting Docker image digest except on PRs.
       # This will only write to the public Rekor transparency log when the Docker

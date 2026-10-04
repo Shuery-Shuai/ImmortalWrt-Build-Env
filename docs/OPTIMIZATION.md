@@ -1,7 +1,7 @@
 # 优化共识（OPTIMIZATION）
 
 > 本文是 2026-10-04 需求澄清会话的结论锚点。**先确认本文，再逐条实施**；实施中若与本文冲突，以本文为准，或先修改本文并说明理由。
-> 状态：**待确认**
+> 状态：**已确认（2026-10-04）**。实施进度：① 可复现性地基 ✅ → ③a CI 证据设施 ✅ → ② 体积（下一步）→ ③b canary / cosign v3 / SBOM / 发布 → ④ 文档 → ⑤ 首发
 
 ## 1. 目标与非目标
 
@@ -62,7 +62,7 @@
 
 - 手段：`--no-install-recommends`；清理 `/usr/share/doc`、`/usr/share/man`、`/usr/share/locale`（保留 C 与 en）、apt 缓存与 lists、examples；必要时再评估剥离静态库/头文件（须有证据）。
 - **禁止**凭经验删除：`llvm`/`clang`、`node`、静态库、头文件。
-- **守门机制**：每次体积优化产出 `dpkg-query` **包清单 diff 报告**（旧镜像 vs 新镜像），作为 CI artifact 并贴到 PR 描述；任何被移除的包必须在本文档记录理由。
+- **守门机制（已实装）**：`scripts/package-diff.sh` 在 PR 上以「上一版已发布镜像」为 baseline 比较 `dpkg-query` 包清单，差异写入 Step Summary 并上传 artifact；任何被移除的包必须登记在 `scripts/packages-removed.allow`（附理由），否则 CI 失败阻断合并。
 - 规则：**先证明再删**。
 - 测量口径：以 CI（GitHub runner）的构建时长与注册表压缩体积为准（本机 Apple Silicon 构建走模拟，不具代表性）。
 
@@ -70,7 +70,7 @@
 
 | Job            | 触发                       | 行为                                                                                       |
 | -------------- | -------------------------- | ------------------------------------------------------------------------------------------ |
-| build + smoke  | PR                         | 构建并 `load` 到本地，跑冒烟测试；**不推送**                                               |
+| build + PR 证据 | PR | 构建并 `load` 到本地：跑 `scripts/smoke-test.sh`、包清单守门（vs 已发布镜像）、体积报告，包清单作为 artifact；**不推送** |
 | publish        | push `main` / dispatch     | 构建、冒烟、推送、cosign 签名、生成 SBOM、建 GitHub Release + 日期 tag                     |
 | canary         | 每月一次 + 手动           | `no-cache` 从零构建 + 冒烟；**不推送、不建 tag**；失败或检测到上游变化时开 Issue            |
 | dependabot     | 每周一                     | base digest 与 actions 更新 PR                                                             |
