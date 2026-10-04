@@ -18,6 +18,7 @@
 | 上游漂移检测 | ✅ 锁定 commit 与上游 master 一致（该步骤为 canary 的组成，已单独验证） |
 | CVE 扫描（trivy） | ✅ 步骤可用：620 项 HIGH/CRITICAL（588 HIGH / 32 CRITICAL），按共识**只报告不阻断** |
 | cosign v3 签名 / 验签 | ✅ 端到端通过（本地注册表）：keyless 签名 + 与 README/workflow 相同的验签参数均成功 |
+| SBOM / provenance attestation | ✅ **生成**已验证：buildkit 调用 syft scanner 并成功导出 attestation manifest（本地测试的推送失败源于脚手架把 `localhost` 解析为 IPv6 `::1`，与工作流无关——真实发布走 https 注册表） |
 
 > 体积口径说明：`docker save` 导出后逐层 gzip(6) 求和，与注册表存储方式一致；本次测得 822 MB，
 > 与整包 gzip 估算（822 MB）相同。已发布镜像同口径为 1506 MB（851 个包）。
@@ -40,8 +41,7 @@
 
 ## 尚未验证的部分（需真实发布）
 
-- buildx 的 SBOM attestation 生成（`sbom: true`）——只有推送到真实注册表时才会产生。
-- CalVer 不可变 tag 的创建、GitHub Release 生成、PR 评论发布。
+- CalVer 不可变 tag 的创建、GitHub Release 生成、PR 评论发布（都需要真实 PR/发布才会发生）。
 - 注册表实际存储的压缩体积（本地测得的分层 gzip 合计 822 MB 已是同口径代理）。
 
 ## 残留
