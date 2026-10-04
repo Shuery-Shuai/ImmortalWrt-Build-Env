@@ -450,7 +450,8 @@ jobs:
               echo "</details>"
             } >> canary-report.md
           fi
-          NUM="$(gh issue list --state open --search 'in:title canary 构建环境巡检' --json number --jq '.[0].number // empty')"
+          NUM="$(gh issue list --state open --limit 100 --json number,title \
+            --jq '[.[] | select(.title | startswith("[canary]"))][0].number // empty')"
           if [ -n "$NUM" ]; then
             gh issue comment "$NUM" --body-file canary-report.md
           else
