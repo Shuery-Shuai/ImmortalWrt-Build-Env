@@ -38,6 +38,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # PR 上把 CI 证据报告（包清单 diff / 体积）作为评论发回 PR
+      pull-requests: write
       # This is used to complete the identity challenge
       # with sigstore/fulcio when running outside of PRs.
       id-token: write
@@ -167,23 +169,42 @@ jobs:
           printf '候选镜像包数: %s\n' "$(wc -l < packages-candidate.txt | tr -d ' ')"
 
       - name: 包清单守门 vs 已发布镜像 (PR only)
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         run: |
+          set -uo pipefail
+          {
+            echo "## CI 证据报告"
+            echo ""
+            echo "- 提交：\`${{ github.sha }}\`"
+            echo ""
+          } > ci-report.md
+          ID="${{ steps.build-and-push.outputs.imageid }}"
+          if [ -z "$ID" ]; then
+            echo "构建未产出镜像，跳过包清单守门"
+            echo "跳过：构建未产出镜像。" >> ci-report.md
+            exit 0
+          fi
           if ! docker pull "$BASELINE_IMAGE" >/dev/null 2>&1; then
             echo "::warning::无法拉取 baseline 镜像 $BASELINE_IMAGE，跳过包清单守门"
             {
               echo "### 包清单 diff"
               echo ""
               echo "跳过：无法拉取 baseline 镜像 \`$BASELINE_IMAGE\`。"
-            } >> "$GITHUB_STEP_SUMMARY"
+            } | tee -a ci-report.md >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          bash scripts/package-diff.sh "$BASELINE_IMAGE" "${{ steps.build-and-push.outputs.imageid }}"
+          set -o pipefail
+          bash scripts/package-diff.sh "$BASELINE_IMAGE" "$ID" | tee -a ci-report.md
 
       - name: 镜像体积报告 (PR only)
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         run: |
+          set -uo pipefail
           ID="${{ steps.build-and-push.outputs.imageid }}"
+          if [ -z "$ID" ]; then
+            echo "构建未产出镜像，跳过体积报告"
+            exit 0
+          fi
           UNCOMPRESSED="$(docker image inspect -f '{{.Size}}' "$ID")"
           COMPRESSED="$(docker save "$ID" | gzip -6 | wc -c | tr -d ' ')"
           {
@@ -195,14 +216,31 @@ jobs:
             echo "| 整包 gzip 估算 | $(numfmt --to=iec "$COMPRESSED") |"
             echo ""
             echo "验收目标 ≤ 1000 MB 以注册表分层压缩合计为准（发布后核对）；此处仅作 PR 间可比基线。"
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a ci-report.md >> "$GITHUB_STEP_SUMMARY"
 
-      - name: 上传包清单产物 (PR only)
-        if: github.event_name == 'pull_request'
+      # 把证据报告作为 PR 评论发布：CI 日志需要鉴权才能读取，评论可以匿名读，
+      # 便于会话/外部工具直接取用（同一条评论会被后续运行覆写，不会刷屏）。
+      - name: 发布 CI 证据报告到 PR (PR only)
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ ! -s ci-report.md ]; then
+            echo "无证据报告，跳过"
+            exit 0
+          fi
+          PR="${{ github.event.pull_request.number }}"
+          gh pr comment "$PR" --body-file ci-report.md --edit-last --create-if-none \
+            || gh pr comment "$PR" --body-file ci-report.md
+
+      - name: 上传 CI 证据产物 (PR only)
+        if: always() && github.event_name == 'pull_request'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: packages-pr-${{ github.event.number }}
-          path: packages-candidate.txt
+          name: ci-evidence-pr-${{ github.event.number }}
+          path: |
+            ci-report.md
+            packages-candidate.txt
           retention-days: 30
 
       # Sign the resulting Docker image digest except on PRs.
