@@ -1,7 +1,7 @@
 # 优化共识（OPTIMIZATION）
 
 > 本文是 2026-10-04 需求澄清会话的结论锚点。**先确认本文，再逐条实施**；实施中若与本文冲突，以本文为准，或先修改本文并说明理由。
-> 状态：**已确认（2026-10-04）**。实施进度：① 可复现性地基 ✅ → ③a CI 证据设施 ✅ → ② 体积（实施中，见 §6）→ ③b canary / cosign v3 / SBOM / 发布 → ④ 文档 → ⑤ 首发
+> 状态：**已确认（2026-10-04）**。实施进度：① 可复现性地基 ✅ → ③a CI 证据设施 ✅ → ② 体积与可复现性收尾（实施中，见 §6、§10）→ ③b canary / cosign v3 / SBOM / 发布 → ④ 文档 → ⑤ 首发
 
 ## 1. 目标与非目标
 
@@ -107,7 +107,7 @@
 
 | 缺口 | 影响 | 计划 |
 | ---- | ---- | ---- |
-| 上游脚本内部两处构建期未固定引用：`padjffs2.c` 取自 `openwrt/openwrt` 的 `main` 分支，`po2lmo` 来自 `openwrt/luci.git` 默认分支的 `git clone` | 同一 commit 可能构建出不同镜像（(b) 未完全达成） | 步骤②：以**独立 patch** 方式固定到具体 commit（vendored 文件保持与上游逐字一致，差异集中在 patch 中，便于上游同步时 diff） |
+| ~~上游脚本内部两处构建期未固定引用~~ | ✅ 已闭环 | 步骤② 已完成：`scripts/patches/0001-pin-extra-artifacts.patch` 把 `padjffs2.c` 钉到 `d06b68f`、`openwrt/luci` 钉到 `aa3d488`；patch 由 Dockerfile 在运行脚本前应用，失败即中断构建 |
 | 上游脚本没有 `set -e`，中途失败仍可能产出"看似成功"的镜像 | 静默的残缺环境 | 步骤③：由冒烟测试断言工具链齐全来兜底；不修改 vendored 文件本身的错误处理 |
 | Dockerfile 的 `Fix Complie Link` 层与上游脚本自身的软链逻辑重复（脚本已 `ln -svf` gcc/g++/gcc-ar/gcc-nm/gcc-ranlib 与 c++） | 冗余层、两处事实源 | 步骤③：冒烟测试到位、能断言软链指向预期版本后，按"先证明再删"处理 |
 | `curl` 必须显式留在 `scripts/packages.txt`（脚本在安装任何东西之前就要用它），`ca-certificates` 同理 | 缺失会让脚本所有 HTTPS 拉取失败 | 已在步骤①显式列出并在清单内注释原因（`--no-install-recommends` 会移除 curl 的 Recommends） |

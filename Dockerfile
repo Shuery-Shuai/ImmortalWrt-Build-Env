@@ -18,8 +18,13 @@ RUN dpkg --add-architecture i386 && \
 # 包清单唯一事实源：scripts/packages.txt
 # 构建脚本唯一样本：scripts/init_build_environment.sh（vendored，上游 commit 见 scripts/upstream.lock）
 COPY scripts/packages.txt scripts/init_build_environment.sh /tmp/
+COPY scripts/patches/ /tmp/patches/
 
 RUN apt-get install -y $(grep -vE '^[[:space:]]*(#|$)' /tmp/packages.txt | xargs) && \
+    for p in /tmp/patches/*.patch; do \
+      echo "applying ${p}"; \
+      patch --batch --forward /tmp/init_build_environment.sh < "${p}"; \
+    done && \
     bash /tmp/init_build_environment.sh && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*

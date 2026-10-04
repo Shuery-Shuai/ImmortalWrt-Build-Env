@@ -26,9 +26,19 @@
 **不做自动同步 PR**：该脚本以 root 身份在构建期执行，自动同步等于把上游任何改动直接送进流水线，
 审查疲劳下极易误合。
 
+## 补丁（`patches/`）
+
+`init_build_environment.sh` 与上游**逐字一致**；我们对该脚本的所有改动都以 patch 形式存放于
+`scripts/patches/`，由 Dockerfile 在运行前按文件名顺序应用（`patch --batch --forward`，
+应用失败即中断构建）。这样上游同步时面对的永远是"干净的原始脚本 + 少量显式补丁"。
+
+| 补丁 | 内容 | 锚点 |
+| ---- | ---- | ---- |
+| `0001-pin-extra-artifacts.patch` | 钉死脚本内部两处构建期未固定的远端引用：`padjffs2.c` 与 `openwrt/luci.git`（用于构建 `po2lmo`） | `padjffs2.c` 自 2016-07-11（`d06b68f`）未再变动；`luci` 固定为 `aa3d488`（2026-10-01） |
+
+这两处 pin **不会自动更新**：需要时人工 bump（改 patch → 更新上表 → CI 冒烟重跑）。
+理由：它们是稳定的构建期小工具，"可复现"比"总是最新"更重要。
+
 ## 已知残余缺口
 
-上游脚本内部仍有两处构建期未固定引用（`padjffs2.c` 取自 `openwrt/openwrt` 的 `main` 分支、
-`po2lmo` 来自 `openwrt/luci.git` 默认分支的 `git clone`），会让"同一 commit 构建出不同镜像"。
-修复方式为**单独维护 patch**（保持本文件与上游逐字一致，差异全部集中在 patch 中），见
-`docs/OPTIMIZATION.md` §10。
+暂无。历史上"脚本内部两处未固定引用"的缺口已由上述 patch 闭环（见 `docs/OPTIMIZATION.md` §10）。
