@@ -68,6 +68,11 @@ check_ok "patch 为 GNU 版" "patch --version 2>&1 | grep -q 'Free Software Foun
 check_ok "diff 为 GNU 版" "diff --version 2>&1 | grep -q GNU"
 check_ok "rsync 可执行" "rsync --version"
 
+printf '\n-- 2b. LLVM 18（上游脚本安装的版本，§7 要求断言）--\n'
+check_ok "clang 版本为 18" 'clang --version | grep -q "clang version 18"'
+check_ok "llvm-18 目录存在" '[ -d /usr/lib/llvm-18 ]'
+check_ok "llvm-config 可用且为 18" 'llvm-config --version | grep -q "^18"'
+
 printf '\n-- 3. 编译器软链一致性 --\n'
 check_ok "/usr/bin/cc 与 /usr/bin/gcc 指向同一目标" '[ "$(readlink -f /usr/bin/cc)" = "$(readlink -f /usr/bin/gcc)" ]'
 check_ok "/usr/bin/c++ 与 /usr/bin/g++ 指向同一目标" '[ "$(readlink -f /usr/bin/c++)" = "$(readlink -f /usr/bin/g++)" ]'
