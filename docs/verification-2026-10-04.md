@@ -16,6 +16,7 @@
 | 包清单守门（对比已发布镜像） | ✅ 386 项移除、**0 项未登记**（候选镜像 516 个包） |
 | 体积 | 2.7 GB 未压缩 / **822 MB 分层 gzip 合计（注册表口径）** —— 验收标准 ≤ 1000 MB **已达成** |
 | 上游漂移检测 | ✅ 锁定 commit 与上游 master 一致（该步骤为 canary 的组成，已单独验证） |
+| canary 滚动 Issue 逻辑 | ✅ 同一段代码连跑两次，分别覆盖**新建**与**追加评论**两条路径（Issue #17，comments=1） |
 | CVE 扫描（trivy） | ✅ 步骤可用：620 项 HIGH/CRITICAL（588 HIGH / 32 CRITICAL），按共识**只报告不阻断** |
 | cosign v3 签名 / 验签 | ✅ 端到端通过（本地注册表）：keyless 签名 + 与 README/workflow 相同的验签参数均成功 |
 | SBOM / provenance attestation | ✅ **生成**已验证：buildkit 调用 syft scanner 并成功导出 attestation manifest（本地测试的推送失败源于脚手架把 `localhost` 解析为 IPv6 `::1`，与工作流无关——真实发布走 https 注册表） |
