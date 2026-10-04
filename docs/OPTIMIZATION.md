@@ -1,7 +1,7 @@
 # 优化共识（OPTIMIZATION）
 
 > 本文是 2026-10-04 需求澄清会话的结论锚点。**先确认本文，再逐条实施**；实施中若与本文冲突，以本文为准，或先修改本文并说明理由。
-> 状态：**已确认（2026-10-04）**。实施进度：① 可复现性地基 ✅ → ③a CI 证据设施 ✅ → ② 体积（下一步）→ ③b canary / cosign v3 / SBOM / 发布 → ④ 文档 → ⑤ 首发
+> 状态：**已确认（2026-10-04）**。实施进度：① 可复现性地基 ✅ → ③a CI 证据设施 ✅ → ② 体积（实施中，见 §6）→ ③b canary / cosign v3 / SBOM / 发布 → ④ 文档 → ⑤ 首发
 
 ## 1. 目标与非目标
 
@@ -64,6 +64,9 @@
 - **禁止**凭经验删除：`llvm`/`clang`、`node`、静态库、头文件。
 - **守门机制（已实装）**：`scripts/package-diff.sh` 在 PR 上以「上一版已发布镜像」为 baseline 比较 `dpkg-query` 包清单，差异写入 Step Summary 并上传 artifact；任何被移除的包必须登记在 `scripts/packages-removed.allow`（附理由，支持 shell 通配模式），否则 CI 失败阻断合并。
 - 规则：**先证明再删**。
+- **Recommends 处置（已量化）**：以本镜像包集合为种子，Debian bookworm 的 Depends 闭包为 484 包 / 2.2 GB，Depends + Recommends 闭包为 1042 包 / 4.8 GB——**仅 Recommends 就引入 558 包 / 2.6 GB**。因此全局关闭 `APT::Install-Recommends`（`scripts/apt-no-recommends.conf`），并把经审计判定为承重的推荐包显式加回 `scripts/packages.txt`（当前：`llvm-18-dev`、`qemu-block-extra`）。
+- **文档与本地化**：用 `dpkg` 的 `path-exclude` 在安装期就不写入 `/usr/share/doc`、`man`、`groff`、`info`、`locale`（保留版权文件与 C/en* locale），而不是装完再删——省的是真实层体积（`scripts/dpkg-nodoc.conf`）。
+- **首次以本改动跑 CI 预期会失败**：守门机制要求被移除的包逐个登记，第一次运行会用真实 diff 清单告诉我们到底少了什么，登记后才允许合并。这是设计行为（先证明再删），不是故障。
 - 测量口径：以 CI（GitHub runner）的构建时长与注册表压缩体积为准（本机 Apple Silicon 构建走模拟，不具代表性）。
 
 ## 7. CI 骨架

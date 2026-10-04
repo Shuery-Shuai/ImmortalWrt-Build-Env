@@ -5,6 +5,11 @@ FROM debian:bookworm@sha256:f37a335e82bca302e955fa39f9dfe28f1be618f016f8a2b56318
 LABEL org.opencontainers.image.base.name="docker.io/library/debian:bookworm" \
       org.opencontainers.image.base.digest="sha256:f37a335e82bca302e955fa39f9dfe28f1be618f016f8a2b56318e5a5111afc26"
 
+# 关闭推荐包安装 + 安装期不写文档/手册/本地化文件；两个 .conf 文件内有量化依据。
+# 必须在第一个 apt 操作之前生效，因此放在这里而不是 install 层的末尾。
+COPY scripts/apt-no-recommends.conf /etc/apt/apt.conf.d/99immortalwrt-build-env
+COPY scripts/dpkg-nodoc.conf /etc/dpkg/dpkg.cfg.d/01immortalwrt-build-env-nodoc
+
 # Prepare System Requirements
 RUN dpkg --add-architecture i386 && \
     apt-get update && \
