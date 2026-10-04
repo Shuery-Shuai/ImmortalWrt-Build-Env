@@ -20,6 +20,16 @@
 - 冒烟测试覆盖上游宿主前置条件（`immortalwrt/prereq-build.mk @ 0a9fcdf`：GCC ≥ 10、
   Python ≥ 3.8、GNU 工具集、rsync）与真实编译运行验证。
 
+### 修复
+
+- **已发布镜像缺少 LLVM 18 / Node / Go**：上游脚本在非中国网络下不写入 bookworm-backports 源，
+  却用 `-t bookworm-backports` 执行 `apt update` 与安装，失败又被脚本的"无 `set -e`"吞掉。
+  现已显式提供该源，镜像补回 clang-18 / nodejs 22 / golang-1.25 / python3-requests 等 51 个包。
+- **`llvm-18-dev` 位置错误**：它只存在于 apt.llvm.org（脚本运行中才配置），写在 `scripts/packages.txt`
+  会导致构建期 apt exit 100；改由 `scripts/patches/0002-add-llvm-dev.patch` 在脚本的 LLVM 安装行补回。
+- **包清单守门的基线镜像名大小写错误**：GHCR 要求全小写，此前一直静默跳过，现已真正执行。
+- 移除与上游脚本重复的 Debian LLVM/Clang 14 全套（冒烟确认 clang/lld 仍可用且为 18）。
+
 ### 变更
 
 - 基础镜像改为**按 digest 固定**（不再使用浮动的 `debian:bookworm`）。
