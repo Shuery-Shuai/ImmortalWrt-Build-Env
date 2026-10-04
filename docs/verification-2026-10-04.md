@@ -19,7 +19,7 @@
 | canary 滚动 Issue 逻辑 | ✅ 同一段代码连跑两次，分别覆盖**新建**与**追加评论**两条路径（Issue #17，comments=1） |
 | CVE 扫描（trivy） | ✅ 步骤可用：620 项 HIGH/CRITICAL（588 HIGH / 32 CRITICAL），按共识**只报告不阻断** |
 | cosign v3 签名 / 验签 | ✅ 端到端通过（本地注册表）：keyless 签名 + 与 README/workflow 相同的验签参数均成功 |
-| SBOM / provenance attestation | ✅ **生成**已验证：buildkit 调用 syft scanner 并成功导出 attestation manifest（本地测试的推送失败源于脚手架把 `localhost` 解析为 IPv6 `::1`，与工作流无关——真实发布走 https 注册表） |
+| SBOM / provenance attestation | ✅ **生成**已验证（buildkit 调用 syft scanner 并导出 attestation manifest）；⚠️ **推送未验证**——两次本地尝试均败于脚手架限制：① buildx 的 BuildKit 跑在容器内，`127.0.0.1` 够不到宿主注册表（需用 bridge IP）；② 非 localhost 的明文 HTTP 注册表需额外 insecure-registry 配置（buildx 默认只对 localhost 放行 HTTP）。真实发布走 GHCR 的 HTTPS，不受这两点影响，但推送本身仍待真实发布确认 |
 
 > 体积口径说明：`docker save` 导出后逐层 gzip(6) 求和，与注册表存储方式一致；本次测得 822 MB，
 > 与整包 gzip 估算（822 MB）相同。已发布镜像同口径为 1506 MB（851 个包）。
@@ -66,7 +66,8 @@
 
 ## 尚未验证的部分（需真实发布）
 
-- CalVer 不可变 tag 的创建、GitHub Release 生成、PR 评论发布（都需要真实 PR/发布才会发生）。
+- CalVer 不可变 tag 的创建、GitHub Release 生成（都需要真实发布才会发生；PR 评论发布已在 PR #19 上验证通过）。
+- buildx 的 SBOM / provenance attestation **推送**到真实注册表（生成已验证，见上表）。
 - 注册表实际存储的压缩体积（本地测得的分层 gzip 合计 822 MB 已是同口径代理）。
 
 ## 残留
