@@ -66,7 +66,8 @@
 - 规则：**先证明再删**。
 - **Recommends 处置（已量化）**：以本镜像包集合为种子，Debian bookworm 的 Depends 闭包为 484 包 / 2.2 GB，Depends + Recommends 闭包为 1042 包 / 4.8 GB——**仅 Recommends 就引入 558 包 / 2.6 GB**。因此全局关闭 `APT::Install-Recommends`（`scripts/apt-no-recommends.conf`），并把经审计判定为承重的推荐包显式加回 `scripts/packages.txt`（当前：`llvm-18-dev`、`qemu-block-extra`）。
 - **文档与本地化**：用 `dpkg` 的 `path-exclude` 在安装期就不写入 `/usr/share/doc`、`man`、`groff`、`info`、`locale`（保留版权文件与 C/en* locale），而不是装完再删——省的是真实层体积（`scripts/dpkg-nodoc.conf`）。
-- **首次以本改动跑 CI 预期会失败**：守门机制要求被移除的包逐个登记，第一次运行会用真实 diff 清单告诉我们到底少了什么，登记后才允许合并。这是设计行为（先证明再删），不是故障。
+- **移除清单已依据分析预登记**：`scripts/packages-removed.allow` 由 2026-10-04 的依赖分析生成（预测 494 个 Recommends-only 包 / 约 2.0 GB，其中 texlive 家族用 `texlive-*` 通配）。CI 的真实 diff 才是权威：漏登记会让 CI 失败并逐个报出，多登记无害；该文件不得包含 `scripts/packages.txt` 里显式要求的任何包（已自检）。
+- **首次以本改动跑 CI 仍可能失败**：守门机制要求被移除的包逐个登记，第一次运行会用真实 diff 清单告诉我们到底少了什么，登记后才允许合并。这是设计行为（先证明再删），不是故障。
 - 测量口径：以 CI（GitHub runner）的构建时长与注册表压缩体积为准（本机 Apple Silicon 构建走模拟，不具代表性）。
 
 ## 7. CI 骨架
