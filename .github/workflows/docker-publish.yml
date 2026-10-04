@@ -41,6 +41,10 @@ jobs:
   build:
     if: github.event_name != 'schedule' && !(github.event_name == 'workflow_dispatch' && inputs.canary)
     runs-on: ubuntu-latest
+    # 同一 ref 的发布串行化：避免两次 main 推送在同一窗口抢跑、互相覆盖 tag
+    concurrency:
+      group: docker-publish-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: write
       packages: write
@@ -337,11 +341,12 @@ jobs:
             git tag "$NAME"
             git push origin "refs/tags/$NAME"
           fi
+          REPO_LC="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
           SIZE_LINE="(本地验证镜像不可用，未测量)"
           if docker image inspect immortalwrt-build-env:verify >/dev/null 2>&1; then
             U="$(docker image inspect -f '{{.Size}}' immortalwrt-build-env:verify)"
-            docker save immortalwrt-build-env:verify -o /tmp/rel.img.tar
-            mkdir -p /tmp/rel.img && tar -xf /tmp/rel.img.tar -C /tmp/rel.img
+            if docker save immortalwrt-build-env:verify -o /tmp/rel.img.tar \
+              && mkdir -p /tmp/rel.img && tar -xf /tmp/rel.img.tar -C /tmp/rel.img; then
             TOTAL=0
             if compgen -G "/tmp/rel.img/*/layer.tar" >/dev/null; then
               FILES=$(find /tmp/rel.img -name layer.tar)
@@ -353,6 +358,9 @@ jobs:
               TOTAL=$((TOTAL + S))
             done
             SIZE_LINE="未压缩 $(numfmt --to=iec "$U") / 分层 gzip 合计 $(numfmt --to=iec "$TOTAL")"
+            else
+              SIZE_LINE="(体积测量失败，已跳过；不影响发布)"
+            fi
           fi
           {
             echo "不可变镜像 tag：\`$NAME\`（同 tag 永不重写；需要完全可复现请用 digest 引用）"
@@ -366,7 +374,7 @@ jobs:
             echo "### 验证签名"
             echo ""
             echo '```sh'
-            echo "cosign verify ghcr.io/${GITHUB_REPOSITORY}@${DIGEST} \\"
+            echo "cosign verify ghcr.io/${REPO_LC}@${DIGEST} \\"
             echo "  --certificate-identity-regexp 'https://github.com/${GITHUB_REPOSITORY}/.github/workflows/.*' \\"
             echo "  --certificate-oidc-issuer https://token.actions.githubusercontent.com"
             echo '```'
@@ -415,12 +423,18 @@ jobs:
 
       - name: 上游脚本漂移检查
         id: drift
+        if: always()
         run: |
           set -uo pipefail
           LOCKED="$(grep '^COMMIT=' scripts/upstream.lock | cut -d= -f2)"
           HEAD="$(git ls-remote https://github.com/immortalwrt/build-scripts.git refs/heads/master | cut -f1)"
           printf '锁定 commit: %s\n上游 commit: %s\n' "$LOCKED" "$HEAD"
-          if [ -n "$HEAD" ] && [ "$LOCKED" != "$HEAD" ]; then
+          if [ -z "$HEAD" ]; then
+            echo "::error::无法获取上游 master HEAD，本次未做比较——不得当成无漂移"
+            echo "drifted=unknown" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          if [ "$LOCKED" != "$HEAD" ]; then
             echo "drifted=true" >> "$GITHUB_OUTPUT"
           else
             echo "drifted=false" >> "$GITHUB_OUTPUT"
@@ -446,10 +460,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -uo pipefail
-          DRIFT="否"
-          if [ "${{ steps.drift.outputs.drifted }}" = "true" ]; then
-            DRIFT="是（需要人工同步 scripts/init_build_environment.sh，流程见 scripts/README.md）"
-          fi
+          case "${{ steps.drift.outputs.drifted }}" in
+            true) DRIFT="是（需要人工同步 scripts/init_build_environment.sh，流程见 scripts/README.md）" ;;
+            unknown) DRIFT="未知（上游 HEAD 获取失败，本次未比较）" ;;
+            *) DRIFT="否" ;;
+          esac
           CRIT="n/a"
           HIGH="n/a"
           if [ -s trivy-report.txt ]; then

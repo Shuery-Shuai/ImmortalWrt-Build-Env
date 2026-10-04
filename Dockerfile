@@ -26,7 +26,7 @@ COPY scripts/patches/ /tmp/patches/
 RUN apt-get install -y $(grep -vE '^[[:space:]]*(#|$)' /tmp/packages.txt | xargs) && \
     for p in /tmp/patches/*.patch; do \
       echo "applying ${p}"; \
-      patch --batch --forward /tmp/init_build_environment.sh < "${p}"; \
+      patch --batch --forward /tmp/init_build_environment.sh < "${p}" || exit 1; \
     done && \
     bash /tmp/init_build_environment.sh && \
     apt-get clean && \
