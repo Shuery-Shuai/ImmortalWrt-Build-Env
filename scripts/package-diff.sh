@@ -38,7 +38,19 @@ if [ -f "$ALLOW_FILE" ]; then
 else
 	: >"$ALLOWED"
 fi
-comm -23 "$WORK_DIR/removed.txt" "$ALLOWED" >"$WORK_DIR/unrecorded.txt"
+
+# 未登记移除 = 移除列表中不被任何 allow 模式匹配的包（allow 支持 shell 通配，如 texlive-*）
+: >"$WORK_DIR/unrecorded.txt"
+while IFS= read -r pkg; do
+	[ -n "$pkg" ] || continue
+	matched=0
+	while IFS= read -r pat; do
+		[ -n "$pat" ] || continue
+		# shellcheck disable=SC2254
+		case "$pkg" in $pat) matched=1; break ;; esac
+	done <"$ALLOWED"
+	[ "$matched" -eq 1 ] || printf '%s\n' "$pkg" >>"$WORK_DIR/unrecorded.txt"
+done <"$WORK_DIR/removed.txt"
 
 BASE_N="$(wc -l <"$WORK_DIR/base.txt" | tr -d ' ')"
 CAND_N="$(wc -l <"$WORK_DIR/cand.txt" | tr -d ' ')"

@@ -62,7 +62,7 @@
 
 - 手段：`--no-install-recommends`；清理 `/usr/share/doc`、`/usr/share/man`、`/usr/share/locale`（保留 C 与 en）、apt 缓存与 lists、examples；必要时再评估剥离静态库/头文件（须有证据）。
 - **禁止**凭经验删除：`llvm`/`clang`、`node`、静态库、头文件。
-- **守门机制（已实装）**：`scripts/package-diff.sh` 在 PR 上以「上一版已发布镜像」为 baseline 比较 `dpkg-query` 包清单，差异写入 Step Summary 并上传 artifact；任何被移除的包必须登记在 `scripts/packages-removed.allow`（附理由），否则 CI 失败阻断合并。
+- **守门机制（已实装）**：`scripts/package-diff.sh` 在 PR 上以「上一版已发布镜像」为 baseline 比较 `dpkg-query` 包清单，差异写入 Step Summary 并上传 artifact；任何被移除的包必须登记在 `scripts/packages-removed.allow`（附理由，支持 shell 通配模式），否则 CI 失败阻断合并。
 - 规则：**先证明再删**。
 - 测量口径：以 CI（GitHub runner）的构建时长与注册表压缩体积为准（本机 Apple Silicon 构建走模拟，不具代表性）。
 
