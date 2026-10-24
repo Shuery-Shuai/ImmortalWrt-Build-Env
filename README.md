@@ -1,12 +1,12 @@
-# ImmortalWrt Build Environment
+# RtfwBuilder — Router Firmware Builder
 
-[![Docker Publish](https://github.com/Shuery-Shuai/ImmortalWrt-Build-Env/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Shuery-Shuai/ImmortalWrt-Build-Env/actions)
-[![GitHub Container Registry](https://img.shields.io/badge/Container%20Registry-GHCR-black)](https://github.com/Shuery-Shuai/ImmortalWrt-Build-Env/pkgs/container/immortalwrt-build-env)
-[![Docker Hub](https://img.shields.io/badge/Container%20Registry-DockerHub-blue)](https://hub.docker.com/r/shuery/immortalwrt-build-env)
+[![Docker Publish](https://github.com/Shuery-Shuai/rtfw-builder/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Shuery-Shuai/rtfw-builder/actions)
+[![GitHub Container Registry](https://img.shields.io/badge/Container%20Registry-GHCR-black)](https://github.com/Shuery-Shuai/rtfw-builder/pkgs/container/rtfw-builder)
+[![Docker Hub](https://img.shields.io/badge/Container%20Registry-DockerHub-blue)](https://hub.docker.com/r/shuery/rtfw-builder)
 
 ## 📖 项目简介
 
-用于构建 ImmortalWrt 固件编译的 Docker 环境。
+**RtfwBuilder**（Router Firmware Builder）用于构建路由器固件编译的 Docker 环境。
 
 本仓库**只提供编译环境**，不包含也不负责固件编译本身。
 
@@ -39,16 +39,16 @@
 - **需要完全可复现时请用 digest 引用**（`@sha256:…`），tag 只供人类阅读：
 
   ```sh
-  docker pull ghcr.io/shuery-shuai/immortalwrt-build-env@sha256:<digest>
+  docker pull ghcr.io/shuery-shuai/rtfw-builder@sha256:<digest>
   # 查当前 digest：
-  docker buildx imagetools inspect ghcr.io/shuery-shuai/immortalwrt-build-env:bookworm
+  docker buildx imagetools inspect ghcr.io/shuery-shuai/rtfw-builder:bookworm
   ```
 
 - **校验签名**（镜像由 CI 以 keyless 方式签名）：
 
   ```sh
-  cosign verify ghcr.io/shuery-shuai/immortalwrt-build-env@sha256:<digest> \
-    --certificate-identity-regexp 'https://github.com/Shuery-Shuai/ImmortalWrt-Build-Env/.github/workflows/.*' \
+  cosign verify ghcr.io/shuery-shuai/rtfw-builder@sha256:<digest> \
+    --certificate-identity-regexp 'https://github.com/Shuery-Shuai/rtfw-builder/.github/workflows/.*' \
     --certificate-oidc-issuer https://token.actions.githubusercontent.com
   ```
 
@@ -64,10 +64,10 @@
 
 ```bash
 # 推荐：浮动 tag（跟随最新发布）
-docker pull shuery/immortalwrt-build-env:latest --platform linux/amd64
+docker pull shuery/rtfw-builder:latest --platform linux/amd64
 
 # 或使用不可变 tag（示例，实际请用 docker buildx imagetools inspect 查询当前可用 tag）
-docker pull shuery/immortalwrt-build-env:bookworm-2026.10.04 --platform linux/amd64
+docker pull shuery/rtfw-builder:bookworm-2026.10.04 --platform linux/amd64
 ```
 
 #### 构建镜像
@@ -75,20 +75,20 @@ docker pull shuery/immortalwrt-build-env:bookworm-2026.10.04 --platform linux/am
 1. 克隆代码
 
    ```sh
-   git clone --depth 1 https://github.com/Shuery-Shuai/ImmortalWrt-Build-Env.git
+   git clone --depth 1 https://github.com/Shuery-Shuai/rtfw-builder.git
    ```
 
 2. 进入目录并构建镜像
 
    ```sh
-   cd ImmortalWrt-Build-Env
+   cd rtfw-builder
    ```
 
    - **Linux / Windows**
 
      ```sh
      docker build --platform linux/amd64 \
-       -t shuery/immortalwrt-build-env:latest \
+       -t shuery/rtfw-builder:latest \
        .
      ```
 
@@ -96,7 +96,7 @@ docker pull shuery/immortalwrt-build-env:bookworm-2026.10.04 --platform linux/am
 
      ```sh
      docker buildx build --platform linux/amd64 \
-       -t shuery/immortalwrt-build-env:latest \
+       -t shuery/rtfw-builder:latest \
        .
      ```
 
@@ -104,17 +104,17 @@ docker pull shuery/immortalwrt-build-env:bookworm-2026.10.04 --platform linux/am
 
 > [!CAUTION]
 >
-> 请将 `/path/to/immortalwrt` 替换为你的 ImmortalWrt 源码所在路径，该路径需大小写敏感。
+> 请将 `/path/to/firmware` 替换为你的固件源码（ImmortalWrt / OpenWrt 等）所在路径，该路径需大小写敏感。
 
 ```sh
-IMMORTALWRT_PATH=/path/to/immortalwrt
+FW_PATH=/path/to/firmware
 ```
 
 > [!TIP]
 >
-> ImmortalWrt 源码的存储路径需要**大小写敏感**，否则编译过程中会出现错误。
+> 固件源码（ImmortalWrt、OpenWrt 及其各类 fork）的存储路径需要**大小写敏感**，否则编译过程中会出现错误。
 >
-> 1. 首先需要创建一个大小写敏感的文件夹，用于存储 ImmortalWrt 源码：
+> 1. 首先需要创建一个大小写敏感的文件夹，用于存储固件源码：
 >
 >    - **macOS**
 >
@@ -125,11 +125,11 @@ IMMORTALWRT_PATH=/path/to/immortalwrt
 >        -size 64G \
 >        -type SPARSEBUNDLE \
 >        -fs "Case-sensitive APFS" \
->        -volname ImmortalWrt \
->        ImmortalWrt.sparsebundle
+>        -volname Firmware \
+>        Firmware.sparsebundle
 >      sudo hdiutil attach \
->        -mountpoint $IMMORTALWRT_PATH \
->        ImmortalWrt.sparsebundle
+>        -mountpoint $FW_PATH \
+>        Firmware.sparsebundle
 >      ```
 >
 >    - **Windows**
@@ -137,15 +137,15 @@ IMMORTALWRT_PATH=/path/to/immortalwrt
 >      可以先使用 `mkdir` 创建一个**空**文件夹并使用 `fsutil` 设定该文件夹 `CaseSensitive`：
 >
 >      ```sh
->      mkdir $IMMORTALWRT_PATH
+>      mkdir $FW_PATH
 >      fsutil file setCaseSensitiveInfo \
->        $IMMORTALWRT_PATH enable
+>        $FW_PATH enable
 >      ```
 >
-> 2. 然后再克隆 ImmortalWrt 源码：
+> 2. 然后再克隆固件源码（下例以 ImmortalWrt 为例）：
 >
 >    ```sh
->    cd $IMMORTALWRT_PATH
+>    cd $FW_PATH
 >    git clone --depth 1 \
 >      -b $BRANCH --single-branch \
 >      --filter=blob:none \
@@ -156,18 +156,28 @@ IMMORTALWRT_PATH=/path/to/immortalwrt
 ```sh
 docker run \
   -itd \
-  --name immortalwrt-build-env \
+  --name rtfw-builder \
   --platform linux/amd64 \
-  -v $IMMORTALWRT_PATH:/home/immortalwrt/workdir \
-  shuery/immortalwrt-build-env:latest
+  -v $FW_PATH:/home/builder/workdir \
+  shuery/rtfw-builder:latest
 ```
 
 ### 🚪 进入容器
 
 ```sh
-docker exec -it immortalwrt-build-env /bin/bash
+docker exec -it rtfw-builder /bin/bash
 cd ~/workdir
 ```
+
+> [!IMPORTANT]
+>
+> **2026-10-24 改名与迁移**：本项目原为 `ImmortalWrt-Build-Env`，现为 **RtfwBuilder**（仓库路径 `rtfw-builder`）。
+>
+> - 镜像名随仓库变更：GHCR 新包 `ghcr.io/shuery-shuai/rtfw-builder`，Docker Hub 新仓库 `shuery/rtfw-builder`。
+>   旧包 `shuery-shuai/immortalwrt-build-env` 的**已发布 tag 保持可拉取但不再更新**（tag 永不重写）。
+> - 容器内用户与工作目录变更：`immortalwrt` → `builder`，`/home/immortalwrt/workdir` → `/home/builder/workdir`。
+>   沿用旧挂载路径的自有 CI / 脚本需同步修改。
+> - `git clone` 旧仓库地址目前会 301 跳转到新地址，但仍建议更新为 `rtfw-builder`。
 
 ## 📦 镜像内容
 
@@ -188,7 +198,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/shuery-shuai/immortalwrt-build-env@sha256:<digest> # 建议用 digest 固定
+      image: ghcr.io/shuery-shuai/rtfw-builder@sha256:<digest> # 建议用 digest 固定
     steps:
       - uses: actions/checkout@v7
       - run: |
@@ -205,4 +215,4 @@ jobs:
 ## 📌 补充说明
 
 - **升级建议**：Debian Bullseye 已 EOL，请升级宿主系统后使用 `main` 分支。
-- **问题反馈**：如遇兼容性问题，请在 [Issues](https://github.com/Shuery-Shuai/ImmortalWrt-Build-Env/issues) 中提出，并注明宿主系统版本与 `docker version` 输出。
+- **问题反馈**：如遇兼容性问题，请在 [Issues](https://github.com/Shuery-Shuai/rtfw-builder/issues) 中提出，并注明宿主系统版本与 `docker version` 输出。

@@ -156,7 +156,7 @@ jobs:
             type=ref,event=pr
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.description=用于构建 ImmortalWrt 固件编译的 Docker 环境。
+            org.opencontainers.image.description=Router Firmware Builder — 用于构建路由器固件编译的 Docker 环境。
             org.opencontainers.image.licenses=MIT
 
       # 先在本地构建并冒烟：**任何路径（含发布）都必须先验证再推送**，
@@ -169,20 +169,20 @@ jobs:
           platforms: linux/amd64
           push: false
           load: true
-          tags: immortalwrt-build-env:verify
+          tags: rtfw-builder:verify
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: 冒烟测试
         if: always()
         run: |
-          if ! docker image inspect immortalwrt-build-env:verify >/dev/null 2>&1; then
+          if ! docker image inspect rtfw-builder:verify >/dev/null 2>&1; then
             echo "本地无待验证镜像（构建步骤未产出），跳过"
             exit 0
           fi
           docker run --rm \
             -v "$PWD/scripts/smoke-test.sh:/smoke-test.sh:ro" \
-            immortalwrt-build-env:verify \
+            rtfw-builder:verify \
             bash /smoke-test.sh
 
       # ---- 以下为 PR 上的证据步骤（docs/OPTIMIZATION.md §6、§7）----
@@ -347,9 +347,9 @@ jobs:
           fi
           REPO_LC="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
           SIZE_LINE="(本地验证镜像不可用，未测量)"
-          if docker image inspect immortalwrt-build-env:verify >/dev/null 2>&1; then
-            U="$(docker image inspect -f '{{.Size}}' immortalwrt-build-env:verify)"
-            if docker save immortalwrt-build-env:verify -o /tmp/rel.img.tar \
+          if docker image inspect rtfw-builder:verify >/dev/null 2>&1; then
+            U="$(docker image inspect -f '{{.Size}}' rtfw-builder:verify)"
+            if docker save rtfw-builder:verify -o /tmp/rel.img.tar \
               && mkdir -p /tmp/rel.img && tar -xf /tmp/rel.img.tar -C /tmp/rel.img; then
             TOTAL=0
             if compgen -G "/tmp/rel.img/*/layer.tar" >/dev/null; then
@@ -416,14 +416,14 @@ jobs:
           push: false
           load: true
           no-cache: true
-          tags: immortalwrt-build-env:canary
+          tags: rtfw-builder:canary
 
       - name: 冒烟测试
         id: smoke
         run: |
           docker run --rm \
             -v "$PWD/scripts/smoke-test.sh:/smoke-test.sh:ro" \
-            immortalwrt-build-env:canary bash /smoke-test.sh
+            rtfw-builder:canary bash /smoke-test.sh
 
       - name: 上游脚本漂移检查
         id: drift
@@ -449,7 +449,7 @@ jobs:
         continue-on-error: true
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: immortalwrt-build-env:canary
+          image-ref: rtfw-builder:canary
           format: table
           severity: CRITICAL,HIGH
           scanners: vuln

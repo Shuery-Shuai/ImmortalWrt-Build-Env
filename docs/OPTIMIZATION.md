@@ -24,10 +24,37 @@
 
 ## 2. 硬约束（用户可见契约，不可变更）
 
-- 镜像名：`ghcr.io/shuery-shuai/immortalwrt-build-env`、`shuery/immortalwrt-build-env`
+- **命名口径**（2026-10-24 与改名一并确立，与 GitHub 实际仓库名对齐）：
+  - 仓库路径（remote / GitHub URL / GHCR 包名派生源）：`Shuery-Shuai/rtfw-builder`，全小写带连字符
+  - 文档标题里的品牌名（驼峰）：`RtfwBuilder`
+  - 全小写：`rtfw-builder` —— Docker Hub 与 GHCR 镜像名、CI 本地 tag、容器名、
+    镜像内 apt/dpkg 配置文件名；GHCR 包名由 `github.repository` 派生，
+    与仓库路径天然一致（均为 `rtfw-builder`），无需在 workflow 里覆写
+  - 全名：`Router Firmware Builder` —— 人类可读全名，用于 README 标题副题与 OCI `description`
+
+- 镜像名：`ghcr.io/shuery-shuai/rtfw-builder`、`shuery/rtfw-builder`
+  （2026-10-24 随仓库改名从 `immortalwrt-build-env` 变更；GHCR 包名跟随 `github.repository`，
+  改名即换包，旧包 `shuery-shuai/immortalwrt-build-env` 已发布 tag 保持原样不删除，
+  但新包首次发布前是 DENIED/403——GHCR 不迁移包也不迁移可见性）
 - 双注册表发布 + cosign 签名
-- 容器内用户 `immortalwrt`、工作目录 `/home/immortalwrt/workdir`（README 的 `docker run -v` 直接依赖）
+- 容器内用户 `builder`、工作目录 `/home/builder/workdir`（README 的 `docker run -v` 直接依赖）
+  （2026-10-24 改名：此前为 `immortalwrt` / `/home/immortalwrt/workdir`，属破坏性变更，见 CHANGELOG「破坏性变更」）
 - 已发布 tag 永不重写
+
+### 2.1 仓库外待办（改名引入，文件改不到）
+
+- [x] **GitHub 仓库已改名为 `rtfw-builder`**（全小写带连字符，API 实测
+  `full_name = Shuery-Shuai/rtfw-builder`）；本地 remote 同步：
+  `git remote set-url origin git@github.com:Shuery-Shuai/rtfw-builder.git`
+- [ ] **Docker Hub 新建 `shuery/rtfw-builder`**（Hub 不支持改名），并把 Actions 变量
+  `DOCKERHUB_REPO` 更新为 `rtfw-builder`（workflow:36 的 `HUB_IMAGE_NAME` 靠它拼装）
+- [ ] **首次发布后把 GHCR 新包设为 Public**：GHCR 不迁移包也不迁移可见性，新包默认 private
+- [ ] GitHub 仓库 **Description / Topics** 仍是改名前的措辞（API 实测 description 仍写
+  "用于构建 ImmortalWrt 固件编译的 Docker 环境"，topics 含 `immortalwrt`）——泛化后应改为
+  "Router Firmware Builder — 用于构建路由器固件编译的 Docker 环境"
+- [x] 旧名跳转链已实测（2026-10-24，匿名 API）：`ImmortalWrt-Build-Env` 与 `RtfwBuilder`
+  均 301 → 同一 id `981007144`（= `rtfw-builder`）。GitHub 的改名跳转在旧名被占用时即断链，
+  因此 README 的 badge / clone / Issues 链接已全部指向 `Shuery-Shuai/rtfw-builder`
 
 ## 3. 兼容性契约
 

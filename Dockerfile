@@ -7,8 +7,8 @@ LABEL org.opencontainers.image.base.name="docker.io/library/debian:bookworm" \
 
 # 关闭推荐包安装 + 安装期不写文档/手册/本地化文件；两个 .conf 文件内有量化依据。
 # 必须在第一个 apt 操作之前生效，因此放在这里而不是 install 层的末尾。
-COPY scripts/apt-no-recommends.conf /etc/apt/apt.conf.d/99immortalwrt-build-env
-COPY scripts/dpkg-nodoc.conf /etc/dpkg/dpkg.cfg.d/01immortalwrt-build-env-nodoc
+COPY scripts/apt-no-recommends.conf /etc/apt/apt.conf.d/99-rtfw-builder
+COPY scripts/dpkg-nodoc.conf /etc/dpkg/dpkg.cfg.d/01-rtfw-builder-nodoc
 # bookworm-backports 源：上游脚本假设它存在（只在中国网络分支写入），否则 LLVM 18 / Node / Go
 # 的安装会静默失败——详见 scripts/apt-backports.list 的说明（CI 实测确认）。
 COPY scripts/apt-backports.list /etc/apt/sources.list.d/bookworm-backports.list
@@ -32,15 +32,15 @@ RUN apt-get install -y $(grep -vE '^[[:space:]]*(#|$)' /tmp/packages.txt | xargs
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# Add User ImmortalWrt
-RUN useradd -m immortalwrt -s /bin/bash && \
-    echo 'immortalwrt ALL=NOPASSWD: ALL' > /etc/sudoers.d/immortalwrt
+# Add User Builder
+RUN useradd -m builder -s /bin/bash && \
+    echo 'builder ALL=NOPASSWD: ALL' > /etc/sudoers.d/builder
 
 # Configure Git Info
-RUN git config --system user.name "immortalwrt" && \
-    git config --system user.email "immortalwrt@build.env"
+RUN git config --system user.name "builder" && \
+    git config --system user.email "builder@rtfw"
 
-VOLUME [ "/home/immortalwrt/workdir" ]
+VOLUME [ "/home/builder/workdir" ]
 
-USER immortalwrt
-WORKDIR /home/immortalwrt/workdir
+USER builder
+WORKDIR /home/builder/workdir

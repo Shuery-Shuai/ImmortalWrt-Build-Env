@@ -39,13 +39,21 @@
   并在安装期用 dpkg `path-exclude` 剔除 doc/man/info/locale（保留 copyright 与 C/en* locale）。
 - 第三方 GitHub Actions 全部改为**按 commit SHA 固定**，由 Dependabot 维护升级。
 - 发布流程改为 CalVer：不可变 tag `bookworm-YYYY.MM.DD[.n]`，浮动别名 `latest`、`bookworm`。
+- 项目定位从"ImmortalWrt 专用"泛化为**路由器固件通用编译环境**（ImmortalWrt / OpenWrt 及各类 fork）：
+  README 与镜像 OCI `description` 同步措辞，宿主目录变量 `IMMORTALWRT_PATH` 改名为中性的 `FW_PATH`。
 - 更正兼容性说明：容器自带 libc，宿主 glibc 不参与容器内进程；旧宿主的问题来自
   Docker/libseccomp 或内核过旧，bullseye 镜像仅为临时回退。
 
 ### 破坏性变更
 
-- 无（镜像名、容器内用户 `immortalwrt`、工作目录 `/home/immortalwrt/workdir`、双注册表
-  与 cosign 签名均未变；已发布 tag 语义不变）。
+- **仓库与镜像改名**：`ImmortalWrt-Build-Env` → `RtfwBuilder` → **`rtfw-builder`**（2026-10-24）。
+  GHCR 包名跟随 `github.repository`（自动转小写），新镜像发布于 `ghcr.io/shuery-shuai/rtfw-builder`；
+  Docker Hub 侧对应 `shuery/rtfw-builder`（Hub 不支持改名，需新建目标仓库）。
+  旧包 `shuery-shuai/immortalwrt-build-env` 的已发布 tag 永不重写、保持可拉取，但不再更新。
+- **容器内用户与工作目录变更**：`immortalwrt` / `/home/immortalwrt/workdir` →
+  `builder` / `/home/builder/workdir`；挂载需改为 `-v $FW_PATH:/home/builder/workdir`，
+  引用旧路径的自有 CI 与脚本要同步修改。冒烟测试的三条用户契约断言已随之更新。
+- 双注册表发布、cosign 签名机制与已发布 tag 语义均未变。
 
 ## [bullseye-v1.0] - 2026-06-22
 

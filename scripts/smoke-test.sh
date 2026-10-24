@@ -133,10 +133,10 @@ printf '  ccache   : %s\n' "$(ccache --version 2>/dev/null | head -n1)"
 printf '  llvm dir : %s\n' "$(ls -d /usr/lib/llvm-1* 2>/dev/null || echo '(none)')"
 
 printf '\n-- 6. 用户可见契约（docs/OPTIMIZATION.md §2）--\n'
-check_ok "当前用户是 immortalwrt" '[ "$(id -un)" = "immortalwrt" ]'
-check_ok "工作目录是 /home/immortalwrt/workdir" '[ "$PWD" = "/home/immortalwrt/workdir" ]'
+check_ok "当前用户是 builder" '[ "$(id -un)" = "builder" ]'
+check_ok "工作目录是 /home/builder/workdir" '[ "$PWD" = "/home/builder/workdir" ]'
 check_ok "宿主架构为 x86_64（镜像仅支持 amd64）" '[ "$(uname -m)" = "x86_64" ]'
-check_ok "sudoers 免密配置存在" '[ -f /etc/sudoers.d/immortalwrt ]'
+check_ok "sudoers 免密配置存在" '[ -f /etc/sudoers.d/builder ]'
 check_ok "sudo 免密可用" 'sudo -n true'
 check_ok "git 全局身份已配置" '[ -n "$(git config --system user.email)" ]'
 check_ok "工作目录可写" 'touch .smoke-write-test && rm -f .smoke-write-test'
