@@ -78,7 +78,7 @@
 
 ## 5. 可复现性
 
-- **Vendor 上游脚本**：把 `init_build_environment.sh` 收入仓库（`scripts/`），并在旁记录上游 `immortalwrt/build-scripts` 的 commit SHA。
+- **Vendor 上游脚本**：把 `init_build_environment.sh` 收入仓库（`vendor/`），并在旁记录上游 `immortalwrt/build-scripts` 的 commit SHA。
   **同步流程：人工**——每月 canary 发现上游新 commit 后开 Issue 提示，由维护者 diff、提交、更新记录的 SHA。不做自动同步 PR（该脚本以 root 身份在构建期执行，自动同步 = 把上游改动直接送进流水线且易被误合）。
 - **base image 按 digest 固定**：`FROM debian:bookworm@sha256:…`；Dependabot（`docker` 生态）每周一提更新 PR；镜像 OCI label 记录 base digest 便于对账。
 - **CI 依赖固定**：所有第三方 action 改为**完整 commit SHA 固定**（行尾注释保留可读版本）；Dependabot（`github-actions`）每周一提 PR。
@@ -89,12 +89,12 @@
 
 - 手段：`--no-install-recommends`；清理 `/usr/share/doc`、`/usr/share/man`、`/usr/share/locale`（保留 C 与 en）、apt 缓存与 lists、examples；必要时再评估剥离静态库/头文件（须有证据）。
 - **禁止**凭经验删除：`llvm`/`clang`、`node`、静态库、头文件。
-- **守门机制（已实装）**：`scripts/package-diff.sh` 在 PR 上以「上一版已发布镜像」为 baseline 比较 `dpkg-query` 包清单，差异写入 Step Summary 并上传 artifact；任何被移除的包必须登记在 `scripts/packages-removed.allow`（附理由，支持 shell 通配模式），否则 CI 失败阻断合并。
+- **守门机制（已实装）**：`ci/package-diff.sh` 在 PR 上以「上一版已发布镜像」为 baseline 比较 `dpkg-query` 包清单，差异写入 Step Summary 并上传 artifact；任何被移除的包必须登记在 `ci/packages-removed.allow`（附理由，支持 shell 通配模式），否则 CI 失败阻断合并。
 - 规则：**先证明再删**。
-- **Recommends 处置（已量化）**：以本镜像包集合为种子，Debian bookworm 的 Depends 闭包为 484 包 / 2.2 GB，Depends + Recommends 闭包为 1042 包 / 4.8 GB——**仅 Recommends 就引入 558 包 / 2.6 GB**。因此全局关闭 `APT::Install-Recommends`（`scripts/apt-no-recommends.conf`），并把经审计判定为承重的推荐包显式补回：`qemu-block-extra` 在 `scripts/packages.txt`；`llvm-18-dev` 因只存在于 apt.llvm.org（脚本运行中才配置该源）而由 `scripts/patches/0002-add-llvm-dev.patch` 补回。
-- **文档与本地化**：用 `dpkg` 的 `path-exclude` 在安装期就不写入 `/usr/share/doc`、`man`、`groff`、`info`、`locale`（保留版权文件与 C/en* locale），而不是装完再删——省的是真实层体积（`scripts/dpkg-nodoc.conf`）。
-- **移除清单已依据分析预登记**：`scripts/packages-removed.allow` 由 2026-10-04 的依赖分析生成（预测 494 个 Recommends-only 包 / 约 2.0 GB，其中 texlive 家族用 `texlive-*` 通配）。CI 的真实 diff 才是权威：漏登记会让 CI 失败并逐个报出，多登记无害；该文件不得包含 `scripts/packages.txt` 里显式要求的任何包（已自检）。
-- **承重项按实测补齐 / 冗余项按实测移除**（依据为 CI 的包清单 diff）：`openssh-client`（`git` 的 Recommends，缺了它 `git clone git@…` 与 ssh 子模块会失败）显式加回 `scripts/packages.txt`；反之 Debian 自带的 LLVM/Clang 14 全套与上游脚本安装的 LLVM 18 重复（脚本已把 `llvm-18/bin/*` 软链进 `/usr/bin`），`systemd` 栈与图形库等 Recommends 在容器内无用途——这些移除逐族登记在 allow 文件中，其中「移除 systemd 栈不影响 sudo」由冒烟断言 `sudo -n true` 实测确认。
+- **Recommends 处置（已量化）**：以本镜像包集合为种子，Debian bookworm 的 Depends 闭包为 484 包 / 2.2 GB，Depends + Recommends 闭包为 1042 包 / 4.8 GB——**仅 Recommends 就引入 558 包 / 2.6 GB**。因此全局关闭 `APT::Install-Recommends`（`build/apt-no-recommends.conf`），并把经审计判定为承重的推荐包显式补回：`qemu-block-extra` 在 `build/packages.txt`；`llvm-18-dev` 因只存在于 apt.llvm.org（脚本运行中才配置该源）而由 `vendor/patches/0002-add-llvm-dev.patch` 补回。
+- **文档与本地化**：用 `dpkg` 的 `path-exclude` 在安装期就不写入 `/usr/share/doc`、`man`、`groff`、`info`、`locale`（保留版权文件与 C/en* locale），而不是装完再删——省的是真实层体积（`build/dpkg-nodoc.conf`）。
+- **移除清单已依据分析预登记**：`ci/packages-removed.allow` 由 2026-10-04 的依赖分析生成（预测 494 个 Recommends-only 包 / 约 2.0 GB，其中 texlive 家族用 `texlive-*` 通配）。CI 的真实 diff 才是权威：漏登记会让 CI 失败并逐个报出，多登记无害；该文件不得包含 `build/packages.txt` 里显式要求的任何包（已自检）。
+- **承重项按实测补齐 / 冗余项按实测移除**（依据为 CI 的包清单 diff）：`openssh-client`（`git` 的 Recommends，缺了它 `git clone git@…` 与 ssh 子模块会失败）显式加回 `build/packages.txt`；反之 Debian 自带的 LLVM/Clang 14 全套与上游脚本安装的 LLVM 18 重复（脚本已把 `llvm-18/bin/*` 软链进 `/usr/bin`），`systemd` 栈与图形库等 Recommends 在容器内无用途——这些移除逐族登记在 allow 文件中，其中「移除 systemd 栈不影响 sudo」由冒烟断言 `sudo -n true` 实测确认。
 - **首次以本改动跑 CI 仍可能失败**：守门机制要求被移除的包逐个登记，第一次运行会用真实 diff 清单告诉我们到底少了什么，登记后才允许合并。这是设计行为（先证明再删），不是故障。
 - 测量口径：以 CI（GitHub runner）的构建时长与注册表压缩体积为准（本机 Apple Silicon 构建走模拟，不具代表性）。
 
@@ -107,17 +107,17 @@
 
 | Job            | 触发                       | 行为                                                                                       |
 | -------------- | -------------------------- | ------------------------------------------------------------------------------------------ |
-| build + PR 证据 | PR | 构建并 `load` 到本地：跑 `scripts/smoke-test.sh`、包清单守门（vs 已发布镜像）、体积报告，包清单作为 artifact；证据报告同时以 PR 评论发布（便于匿名读取与 review）；**不推送** |
+| build + PR 证据 | PR | 构建并 `load` 到本地：跑 `ci/smoke-test.sh`、包清单守门（vs 已发布镜像）、体积报告，包清单作为 artifact；证据报告同时以 PR 评论发布（便于匿名读取与 review）；**不推送** |
 | publish        | push `main` / dispatch     | 构建、冒烟、推送、cosign 签名、生成 SBOM、建 GitHub Release + 日期 tag                     |
 | canary         | 每月 1 日 + 手动          | `no-cache` 从零构建 + 冒烟 + trivy CVE 扫描（仅报告）；**不推送、不建 tag**；每月发布一条滚动 Issue 记录结果（失败或漂移显著标注） |
 | dependabot     | 每周一                     | base digest 与 actions 更新 PR                                                             |
 
-`scripts/smoke-test.sh` 断言内容：
+`ci/smoke-test.sh` 断言内容：
 
 1. 工具链存在性与版本：`gcc` / `g++` / `cc` / `c++` 软链指向预期 GCC 主版本；`clang`（版本须为 18）/ `clang++` / `lld`、`/usr/lib/llvm-18` 与 `llvm-config`、`python3`、`node`、`ccache`、`make`、`rsync`、`unzip`、`git`、`patch` 存在。
 2. **上游 host prereq 断言**（来源：`immortalwrt/prereq-build.mk` @ 记录 commit）：`gcc -dumpversion` 匹配 `^(1[0-9]|[2-9][0-9])`、`g++` 同理、`python3 -V` ≥ 3.8、`tar`/`find`/`bash`/`xargs`/`patch`/`diff` 为 GNU 版、`rsync` 可用。
 3. 功能性验证：编译并运行带 `pthread` 的 C hello-world；`python3 -m py_compile` 一个临时文件。
-4. 包清单 diff 报告由 CI 步骤产出（`scripts/package-diff.sh`），不在冒烟脚本内。
+4. 包清单 diff 报告由 CI 步骤产出（`ci/package-diff.sh`），不在冒烟脚本内。
 
 其他：SBOM 每次发布必生成（buildx attestation）；CVE 扫描仅出报告、附在每月 canary 的 Issue 里，**不阻断发布**（工具链镜像 CVE 噪音大且多不可利用）。
 
@@ -141,10 +141,10 @@
 
 | 缺口 | 影响 | 计划 |
 | ---- | ---- | ---- |
-| ~~上游脚本内部两处构建期未固定引用~~ | ✅ 已闭环 | 步骤② 已完成：`scripts/patches/0001-pin-extra-artifacts.patch` 把 `padjffs2.c` 钉到 `d06b68f`、`openwrt/luci` 钉到 `aa3d488`；patch 由 Dockerfile 在运行脚本前应用，失败即中断构建 |
+| ~~上游脚本内部两处构建期未固定引用~~ | ✅ 已闭环 | 步骤② 已完成：`vendor/patches/0001-pin-extra-artifacts.patch` 把 `padjffs2.c` 钉到 `d06b68f`、`openwrt/luci` 钉到 `aa3d488`；patch 由 Dockerfile 在运行脚本前应用，失败即中断构建 |
 | 上游脚本没有 `set -e`，中途失败仍可能产出"看似成功"的镜像 | 静默的残缺环境 | 步骤③：由冒烟测试断言工具链齐全来兜底；不修改 vendored 文件本身的错误处理 |
 | ~~Dockerfile 的 `Fix Complie Link` 层与上游脚本软链逻辑重复~~ | ✅ 已闭环 | 冒烟已断言 `cc`/`gcc` 与 `c++`/`g++` 一致性后，按"先证明再删"删除该层（脚本自身会 `ln -svf` gcc/g++/gcc-ar/gcc-nm/gcc-ranlib 与 c++；`cc` 由 Debian alternatives 提供），由 CI 冒烟与包清单守门验证 |
-| `curl` 必须显式留在 `scripts/packages.txt`（脚本在安装任何东西之前就要用它），`ca-certificates` 同理 | 缺失会让脚本所有 HTTPS 拉取失败 | 已在步骤①显式列出并在清单内注释原因（`--no-install-recommends` 会移除 curl 的 Recommends） |
+| `curl` 必须显式留在 `build/packages.txt`（脚本在安装任何东西之前就要用它），`ca-certificates` 同理 | 缺失会让脚本所有 HTTPS 拉取失败 | 已在步骤①显式列出并在清单内注释原因（`--no-install-recommends` 会移除 curl 的 Recommends） |
 
 | `workflow_dispatch` 带 tag 输入时会重推该 tag 的镜像（可能覆盖已发布 tag） | 与「已发布 tag 永不重写」存在张力 | 已加 job 级 `concurrency` 串行化；该路径仅供维护者有意重建（bullseye 线已冻结，正常无需使用）。若要彻底禁止，需查询注册表并拒绝已存在的 tag——按 YAGNI 暂不做 |
 

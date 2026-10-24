@@ -7,21 +7,21 @@ LABEL org.opencontainers.image.base.name="docker.io/library/debian:bookworm" \
 
 # 关闭推荐包安装 + 安装期不写文档/手册/本地化文件；两个 .conf 文件内有量化依据。
 # 必须在第一个 apt 操作之前生效，因此放在这里而不是 install 层的末尾。
-COPY scripts/apt-no-recommends.conf /etc/apt/apt.conf.d/99-rtfw-builder
-COPY scripts/dpkg-nodoc.conf /etc/dpkg/dpkg.cfg.d/01-rtfw-builder-nodoc
+COPY build/apt-no-recommends.conf /etc/apt/apt.conf.d/99-rtfw-builder
+COPY build/dpkg-nodoc.conf /etc/dpkg/dpkg.cfg.d/01-rtfw-builder-nodoc
 # bookworm-backports 源：上游脚本假设它存在（只在中国网络分支写入），否则 LLVM 18 / Node / Go
-# 的安装会静默失败——详见 scripts/apt-backports.list 的说明（CI 实测确认）。
-COPY scripts/apt-backports.list /etc/apt/sources.list.d/bookworm-backports.list
+# 的安装会静默失败——详见 build/apt-backports.list 的说明（CI 实测确认）。
+COPY build/apt-backports.list /etc/apt/sources.list.d/bookworm-backports.list
 
 # Prepare System Requirements
 RUN dpkg --add-architecture i386 && \
     apt-get update && \
     apt-get full-upgrade -y
 
-# 包清单唯一事实源：scripts/packages.txt
-# 构建脚本唯一样本：scripts/init_build_environment.sh（vendored，上游 commit 见 scripts/upstream.lock）
-COPY scripts/packages.txt scripts/init_build_environment.sh /tmp/
-COPY scripts/patches/ /tmp/patches/
+# 包清单唯一事实源：build/packages.txt
+# 构建脚本唯一样本：vendor/init_build_environment.sh（vendored，上游 commit 见 vendor/upstream.lock）
+COPY build/packages.txt vendor/init_build_environment.sh /tmp/
+COPY vendor/patches/ /tmp/patches/
 
 RUN apt-get install -y $(grep -vE '^[[:space:]]*(#|$)' /tmp/packages.txt | xargs) && \
     for p in /tmp/patches/*.patch; do \

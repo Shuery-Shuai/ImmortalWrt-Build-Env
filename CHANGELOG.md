@@ -43,6 +43,19 @@
   README 与镜像 OCI `description` 同步措辞，宿主目录变量 `IMMORTALWRT_PATH` 改名为中性的 `FW_PATH`。
 - 更正兼容性说明：容器自带 libc，宿主 glibc 不参与容器内进程；旧宿主的问题来自
   Docker/libseccomp 或内核过旧，bullseye 镜像仅为临时回退。
+- **目录重组：`scripts/` 按消费方拆为 `build/` + `vendor/` + `ci/`，`scripts/` 目录彻底消失**。
+  旧结构把 12 个职能完全不同的文件堆在一层（apt/dpkg 配置片段、包清单、vendored 上游脚本、
+  CI 校验脚本混在一起），分类依据是**谁消费这个文件**，不是文件类型：
+  `build/` = Dockerfile 直接 `COPY` 进镜像的构建输入（三个 apt/dpkg 片段 + `packages.txt`）；
+  `vendor/` = vendored 上游脚本本体 + `upstream.lock` 版本锁 + `patches/`（脚本仍与上游逐字一致，
+  `SHA256` 未变，补丁仍由 Dockerfile 以显式文件参数应用）；
+  `ci/` = `package-diff.sh` / `smoke-test.sh` 及其读取的 `packages-removed.allow`。
+  原 `scripts/README.md` 拆为三份各自成文的 README，每份开头写明本目录的归类判据。
+  同时新增 CI 结构守门 job `structure`（跑在 `build` 之前，只查路径不建镜像）：断言旧 `scripts`
+  目录下不再有任何文件、仓库根无游离顶层项、三个新目录之下只有已登记文件，失败信息自带归类判据。
+  镜像内容与运行时行为不变（`COPY` 目标路径未变）。
+  **历史文档与历史条目中的 `scripts/` 路径为当时状态，不再有效**——`docs/verification-2026-10-04.md`
+  与本文件上方旧条目按用户要求原样保留、不做改写，以免篡改已验证记录。
 
 ### 破坏性变更
 

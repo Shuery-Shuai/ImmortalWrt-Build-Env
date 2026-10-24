@@ -2,7 +2,7 @@
 #
 # 规则：
 #   1. 每行一个包名，# 之后写移除理由；
-#   2. CI 的 scripts/package-diff.sh 会把"上一版已发布镜像"当作 baseline，
+#   2. CI 的 ci/package-diff.sh 会把"上一版已发布镜像"当作 baseline，
 #      任何不在本文件中的移除都会让 PR 直接失败；
 #   3. 空清单表示"不允许任何移除"——这是当前状态。
 #   4. 模式支持 shell 通配（例如 texlive-*、*-doc），用于一次性登记同族包；

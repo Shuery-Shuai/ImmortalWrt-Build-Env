@@ -1,7 +1,7 @@
 # 本镜像"显式要求"的包清单 —— 唯一事实源（Dockerfile 只负责读取本文件）。
 #
 # 规则（详见 docs/OPTIMIZATION.md §5 / §6）：
-# 1. 上游 vendored 脚本（scripts/init_build_environment.sh）会安装的包，不在本文件重复列出；
+# 1. 上游 vendored 脚本（vendor/init_build_environment.sh）会安装的包，不在本文件重复列出；
 #    §5「消除两份清单重叠」已执行：62 项重复条目已移除。
 # 2. 例外：**脚本自身在安装任何东西之前就要用到的工具必须保留**，否则脚本会先失败——见 bootstrap 段。
 # 3. 删除任何包都需要证据：dpkg 包清单 diff 报告（旧镜像 vs 新镜像）+ 冒烟测试通过。
@@ -22,7 +22,7 @@ ca-certificates
 #   `qemu-system-any | qemu-utils` 的第一个分支，把整套 QEMU 系统模拟器拖进来
 #   （CI 实测：去重后 +53 包 / +72 MB，qemu-system-x86 及其 SPICE/GStreamer 依赖）。
 qemu-utils
-# patch：Dockerfile 在运行上游脚本**之前**就要用 patch 应用 scripts/patches/*.patch，
+# patch：Dockerfile 在运行上游脚本**之前**就要用 patch 应用 vendor/patches/*.patch，
 #   而脚本要到自己的安装步骤才装 patch——因此它属于 bootstrap 例外，不能算重复项。
 patch
 # openssh-client：git 的 Recommends，缺了它 `git clone git@…` 与 ssh 子模块会失败（CI 实测发现）。
@@ -41,6 +41,6 @@ qemu-block-extra
 # --- 刻意移除（有实测依据）---
 # llvm-18-dev：只存在于 apt.llvm.org，而该源由脚本在运行中才配置；写在这里会让构建期
 #   报 "Unable to locate package" 并以 exit 100 失败（CI 实测确认）。改由
-#   scripts/patches/0002-add-llvm-dev.patch 在脚本的 LLVM 安装行补回。
+#   vendor/patches/0002-add-llvm-dev.patch 在脚本的 LLVM 安装行补回。
 # clang / lld / llvm：Debian 自带的 14 全套，与脚本安装的 LLVM 18 重复
 #   （脚本已把 /usr/lib/llvm-18/bin/* 软链进 /usr/bin；CI 实测确认移除后冒烟仍通过）。

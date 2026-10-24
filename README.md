@@ -182,10 +182,10 @@ cd ~/workdir
 ## 📦 镜像内容
 
 - **基底**：Debian Bookworm，`FROM` 按 digest 固定；升级由 Dependabot 每周一提 PR。
-- **包清单唯一事实源**：[`scripts/packages.txt`](scripts/packages.txt)。apt 的 Recommends 已全局关闭
+- **包清单唯一事实源**：[`build/packages.txt`](build/packages.txt)。apt 的 Recommends 已全局关闭
   （体积考虑），经审计判定为承重的推荐包在该文件中显式列出。
 - **上游构建脚本**：`init_build_environment.sh` 以 vendored 方式随仓库固定，上游 commit 记录在
-  [`scripts/upstream.lock`](scripts/upstream.lock)；同步流程见 [`scripts/README.md`](scripts/README.md)。
+  [`vendor/upstream.lock`](vendor/upstream.lock)；同步流程见 [`vendor/README.md`](vendor/README.md)。
 - **主要工具**：GCC 12（`gcc`/`g++`/`cc`/`c++` 软链指向它）、LLVM/Clang 18、Python 3、Node.js + yarn、
   Go、ccache、make、rsync、patch、qemu-img、upx、padjffs2、po2lmo、git、gh 等。
 - **上游宿主前置条件**：镜像满足 `immortalwrt/prereq-build.mk` 的要求（GCC ≥ 10、Python ≥ 3.8、

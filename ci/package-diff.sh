@@ -3,15 +3,15 @@
 # 比较 baseline 与 candidate 两个镜像的 dpkg 包清单，输出新增/移除报告；
 # 任何未在 allow 文件登记的"移除"都会导致非零退出，从而阻断 PR。
 #
-# 用法: scripts/package-diff.sh <baseline-image> <candidate-image> [allow-file]
-#   allow-file 默认 scripts/packages-removed.allow
+# 用法: ci/package-diff.sh <baseline-image> <candidate-image> [allow-file]
+#   allow-file 默认 ci/packages-removed.allow
 # printf 格式串里的反引号是 Markdown 代码标记，不是命令替换，属 shellcheck SC2016 误报。
 # shellcheck disable=SC2016
 set -uo pipefail
 
 BASE_IMG="${1:?用法: package-diff.sh <baseline-image> <candidate-image> [allow-file]}"
 CAND_IMG="${2:?用法: package-diff.sh <baseline-image> <candidate-image> [allow-file]}"
-ALLOW_FILE="${3:-scripts/packages-removed.allow}"
+ALLOW_FILE="${3:-ci/packages-removed.allow}"
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -77,7 +77,7 @@ report() {
 		printf '```\n\n</details>\n\n'
 	fi
 	if [ "$UNREC_N" -gt 0 ]; then
-		printf '**未登记移除（必须处理）**：请把每个包连同理由写入 `%s`，或在 `scripts/packages.txt` 中恢复它。\n\n```\n' "$ALLOW_FILE"
+		printf '**未登记移除（必须处理）**：请把每个包连同理由写入 `%s`，或在 `build/packages.txt` 中恢复它。\n\n```\n' "$ALLOW_FILE"
 		cat "$WORK_DIR/unrecorded.txt"
 		printf '```\n'
 	fi

@@ -38,7 +38,115 @@ env:
   # 而 github.repository 保留了大小写（Shuery-Shuai/...），直接引用会 404。
 
 jobs:
+  # 目录结构守门（防复发）：旧的 scripts 目录曾把 apt 配置片段、包清单、vendored 上游脚本、CI 校验脚本
+  # 混在一层，现已按**消费方**拆为 build/ + vendor/ + ci/。本 job 只查结构、不建镜像，
+  # 因此很便宜；它同时防止两类复发：把文件放回旧 scripts 目录，或在新目录/仓库根乱丢未登记文件。
+  # 该步骤的 shell 只依赖 git ls-files / git ls-files --others，本地可直接复现同一退出码。
+  structure:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: 目录结构守门
+        shell: bash
+        run: |
+          set -uo pipefail
+          CRITERIA='归类判据（新增文件必须归入下面三者之一，不要在仓库根放业务文件）：
+            build/  = Dockerfile 直接 COPY 进镜像的构建输入（apt/dpkg 配置片段 + 包清单）
+            vendor/ = vendored 的上游构建脚本本体 + 版本锁 + 对它的补丁
+            ci/     = 只在 CI 里跑的校验脚本 + 校验脚本读的守门数据
+          仓库根允许项：Dockerfile、README.md、CHANGELOG.md、LICENSE、docs/、build/、vendor/、ci/、.github/
+          登记方式：在 .github/workflows/docker-publish.yml 的本步骤 ALLOW_* 清单中加入该路径。'
+          ALLOWED_ROOT='Dockerfile
+          README.md
+          CHANGELOG.md
+          LICENSE
+          docs
+          .github
+          build
+          vendor
+          ci'
+          ALLOW_build='build/README.md
+          build/apt-backports.list
+          build/apt-no-recommends.conf
+          build/dpkg-nodoc.conf
+          build/packages.txt'
+          ALLOW_vendor='vendor/README.md
+          vendor/init_build_environment.sh
+          vendor/upstream.lock
+          vendor/patches/0001-pin-extra-artifacts.patch
+          vendor/patches/0002-add-llvm-dev.patch'
+          ALLOW_ci='ci/README.md
+          ci/package-diff.sh
+          ci/packages-removed.allow
+          ci/smoke-test.sh'
+
+          in_list() { # in_list <path> <多行清单>
+            local line
+            while IFS= read -r line; do
+              [ -n "$line" ] || continue
+              [ "$1" = "$line" ] && return 0
+            done <<<"$2"
+            return 1
+          }
+
+          FAILED=0
+          # 已跟踪 + 未跟踪（--exclude-standard 尊重 .gitignore）都要查，
+          # 否则本地新建但尚未 git add 的游离文件会溜过去。
+          FILES="$( { git ls-files; git ls-files --others --exclude-standard; } | sort -u )"
+
+          # 1) 旧目录 scripts 必须彻底消失（磁盘 + index 两侧都断言）
+          if [ -e scripts ]; then
+            echo "::error::旧 scripts 目录仍存在（磁盘）—— 已按消费方拆分为 build/ + vendor/ + ci/"
+            FAILED=1
+          fi
+          while IFS= read -r f; do
+            case "$f" in
+              scripts*)
+                echo "::error::旧 scripts 目录下仍有文件：$f —— 请改放到 build/ vendor/ ci/ 之一"
+                FAILED=1
+                ;;
+            esac
+          done <<<"$FILES"
+
+          # 2) 仓库根不得有未登记的顶层项
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            top="${f%%/*}"
+            in_list "$top" "$ALLOWED_ROOT" || {
+              echo "::error::仓库根存在未登记项：$f（顶层 $top）"
+              FAILED=1
+            }
+          done <<<"$FILES"
+
+          # 3) build/ vendor/ ci/ 之下只能是各自已登记文件（未登记说明它放错了目录）
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            case "$f" in
+              build/*)  ALLOW="$ALLOW_build";  DIR=build ;;
+              vendor/*) ALLOW="$ALLOW_vendor"; DIR=vendor ;;
+              ci/*)     ALLOW="$ALLOW_ci";     DIR=ci ;;
+              *) continue ;;
+            esac
+            in_list "$f" "$ALLOW" || {
+              echo "::error::$DIR/ 下有未登记文件：$f —— 对照归类判据确认它是否放错目录，或在本步骤登记它"
+              FAILED=1
+            }
+          done <<<"$FILES"
+
+          if [ "$FAILED" -ne 0 ]; then
+            printf '\n%s\n' "$CRITERIA"
+            echo "::error::目录结构守门失败"
+            exit 1
+          fi
+          printf '结构守门通过：旧 scripts 目录已消失，仓库根无游离顶层项，build/ vendor/ ci/ 之下全部已登记（检查 %s 个文件）。\n' "$(printf '%s\n' "$FILES" | grep -c .)"
+
   build:
+    # 结构不对就不要浪费一次镜像构建
+    needs: structure
     if: github.event_name != 'schedule' && !(github.event_name == 'workflow_dispatch' && inputs.canary)
     runs-on: ubuntu-latest
     # 同一 ref 的发布串行化：避免两次 main 推送在同一窗口抢跑、互相覆盖 tag
@@ -181,7 +289,7 @@ jobs:
             exit 0
           fi
           docker run --rm \
-            -v "$PWD/scripts/smoke-test.sh:/smoke-test.sh:ro" \
+            -v "$PWD/ci/smoke-test.sh:/smoke-test.sh:ro" \
             rtfw-builder:verify \
             bash /smoke-test.sh
 
@@ -226,7 +334,7 @@ jobs:
             exit 0
           fi
           set -o pipefail
-          bash scripts/package-diff.sh "$BASELINE_IMAGE" "$ID" | tee -a ci-report.md
+          bash ci/package-diff.sh "$BASELINE_IMAGE" "$ID" | tee -a ci-report.md
 
       - name: 镜像体积报告 (PR only)
         if: always() && github.event_name == 'pull_request'
@@ -372,8 +480,8 @@ jobs:
             echo "- digest：\`$DIGEST\`"
             echo "- 体积：${SIZE_LINE}"
             echo "- 平台：linux/amd64"
-            echo "- 上游构建脚本：\`$(grep '^COMMIT=' scripts/upstream.lock | cut -d= -f2)\`"
-            echo "- 包清单：\`scripts/packages.txt\`（构建产物清单见对应 PR 的 CI 证据报告）"
+            echo "- 上游构建脚本：\`$(grep '^COMMIT=' vendor/upstream.lock | cut -d= -f2)\`"
+            echo "- 包清单：\`build/packages.txt\`（构建产物清单见对应 PR 的 CI 证据报告）"
             echo ""
             echo "### 验证签名"
             echo ""
@@ -422,7 +530,7 @@ jobs:
         id: smoke
         run: |
           docker run --rm \
-            -v "$PWD/scripts/smoke-test.sh:/smoke-test.sh:ro" \
+            -v "$PWD/ci/smoke-test.sh:/smoke-test.sh:ro" \
             rtfw-builder:canary bash /smoke-test.sh
 
       - name: 上游脚本漂移检查
@@ -430,7 +538,7 @@ jobs:
         if: always()
         run: |
           set -uo pipefail
-          LOCKED="$(grep '^COMMIT=' scripts/upstream.lock | cut -d= -f2)"
+          LOCKED="$(grep '^COMMIT=' vendor/upstream.lock | cut -d= -f2)"
           HEAD="$(git ls-remote https://github.com/immortalwrt/build-scripts.git refs/heads/master | cut -f1)"
           printf '锁定 commit: %s\n上游 commit: %s\n' "$LOCKED" "$HEAD"
           if [ -z "$HEAD" ]; then
@@ -465,7 +573,7 @@ jobs:
         run: |
           set -uo pipefail
           case "${{ steps.drift.outputs.drifted }}" in
-            true) DRIFT="是（需要人工同步 scripts/init_build_environment.sh，流程见 scripts/README.md）" ;;
+            true) DRIFT="是（需要人工同步 vendor/init_build_environment.sh，流程见 vendor/README.md）" ;;
             unknown) DRIFT="未知（上游 HEAD 获取失败，本次未比较）" ;;
             *) DRIFT="否" ;;
           esac
@@ -487,7 +595,7 @@ jobs:
             echo ""
             echo "运行：${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             echo ""
-            echo "锁定的上游 commit 见 \`scripts/upstream.lock\`；CVE 结果仅作提示，不阻断发布。"
+            echo "锁定的上游 commit 见 \`vendor/upstream.lock\`；CVE 结果仅作提示，不阻断发布。"
           } > canary-report.md
           if [ -s trivy-report.txt ]; then
             {

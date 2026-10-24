@@ -3,7 +3,7 @@
 # 依据：docs/OPTIMIZATION.md §7
 #
 # 运行方式（CI 见 .github/workflows/docker-publish.yml）：
-#   docker run --rm -v "$PWD/scripts/smoke-test.sh:/smoke-test.sh:ro" <image> bash /smoke-test.sh
+#   docker run --rm -v "$PWD/ci/smoke-test.sh:/smoke-test.sh:ro" <image> bash /smoke-test.sh
 #
 # 上游前置条件镜像自 immortalwrt/immortalwrt 的 include/prereq-build.mk
 #   @ 0a9fcdf5715ffd6cd384775f4a98494026543061
