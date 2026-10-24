@@ -1,0 +1,11 @@
+---
+# hadolint 守门配置（CI 里由 lint job 显式 -c 指向本文件）。
+#
+# 分级口径由命令行 --failure-threshold error 决定：style/info/warning 只报告、
+# 不阻断，只有 error 级发现才让 job 变红。这里刻意不写 failure-threshold，
+# 避免配置与命令行的阈值来源出现两份。
+#
+# 目前镜像本身零发现，因此 ignored 为空。若将来必须豁免某条规则，
+# 在这里加 DL 编号并就地写明理由（例如
+#   ignored: [DL3008]  # 包清单由 build/packages.txt 固定，无需 apk 再钉版本）。
+ignored: []

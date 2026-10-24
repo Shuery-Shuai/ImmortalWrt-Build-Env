@@ -25,6 +25,7 @@
 ## 2. 硬约束（用户可见契约，不可变更）
 
 - **命名口径**（2026-10-24 与改名一并确立，与 GitHub 实际仓库名对齐）：
+
   - 仓库路径（remote / GitHub URL / GHCR 包名派生源）：`Shuery-Shuai/rtfw-builder`，全小写带连字符
   - 文档标题里的品牌名（驼峰）：`RtfwBuilder`
   - 全小写：`rtfw-builder` —— Docker Hub 与 GHCR 镜像名、CI 本地 tag、容器名、
@@ -44,17 +45,17 @@
 ### 2.1 仓库外待办（改名引入，文件改不到）
 
 - [x] **GitHub 仓库已改名为 `rtfw-builder`**（全小写带连字符，API 实测
-  `full_name = Shuery-Shuai/rtfw-builder`）；本地 remote 同步：
-  `git remote set-url origin git@github.com:Shuery-Shuai/rtfw-builder.git`
+      `full_name = Shuery-Shuai/rtfw-builder`）；本地 remote 同步：
+      `git remote set-url origin git@github.com:Shuery-Shuai/rtfw-builder.git`
 - [ ] **Docker Hub 新建 `shuery/rtfw-builder`**（Hub 不支持改名），并把 Actions 变量
-  `DOCKERHUB_REPO` 更新为 `rtfw-builder`（workflow:36 的 `HUB_IMAGE_NAME` 靠它拼装）
+      `DOCKERHUB_REPO` 更新为 `rtfw-builder`（workflow:36 的 `HUB_IMAGE_NAME` 靠它拼装）
 - [ ] **首次发布后把 GHCR 新包设为 Public**：GHCR 不迁移包也不迁移可见性，新包默认 private
 - [ ] GitHub 仓库 **Description / Topics** 仍是改名前的措辞（API 实测 description 仍写
-  "用于构建 ImmortalWrt 固件编译的 Docker 环境"，topics 含 `immortalwrt`）——泛化后应改为
-  "Router Firmware Builder — 用于构建路由器固件编译的 Docker 环境"
+      "用于构建 ImmortalWrt 固件编译的 Docker 环境"，topics 含 `immortalwrt`）——泛化后应改为
+      "Router Firmware Builder — 用于构建路由器固件编译的 Docker 环境"
 - [x] 旧名跳转链已实测（2026-10-24，匿名 API）：`ImmortalWrt-Build-Env` 与 `RtfwBuilder`
-  均 301 → 同一 id `981007144`（= `rtfw-builder`）。GitHub 的改名跳转在旧名被占用时即断链，
-  因此 README 的 badge / clone / Issues 链接已全部指向 `Shuery-Shuai/rtfw-builder`
+      均 301 → 同一 id `981007144`（= `rtfw-builder`）。GitHub 的改名跳转在旧名被占用时即断链，
+      因此 README 的 badge / clone / Issues 链接已全部指向 `Shuery-Shuai/rtfw-builder`
 
 ## 3. 兼容性契约
 
@@ -84,6 +85,9 @@
 - **CI 依赖固定**：所有第三方 action 改为**完整 commit SHA 固定**（行尾注释保留可读版本）；Dependabot（`github-actions`）每周一提 PR。
 - **cosign 升级至 v3.x**（当前 workflow 钉的是 v2.4.3，最新为 v3.1.3），以 CI 内签名 + `cosign verify` 双端验证通过为准；若 v3 有破坏性变更导致验证失败，暂留 v2.4.3 并在本文档记 issue。
 - **唯一事实源**：包清单合并到 vendored 脚本/清单，Dockerfile 只负责调用，消除当前 Dockerfile 与上游脚本两份清单重叠的问题。
+- **空包清单在构建期就失败**：Dockerfile 第 [6] 层把包名提取移到简单赋值 `PKGS="$(…)"` 并加 `[ -z "$PKGS" ]` 判空，空/纯注释/文件缺失三种情形都以非零退出中止构建。此前该管道处在 `apt-get install -y` 的参数位置，命令替换的退出码不外传，apt 收到 0 个包参数仍返回 0，于是产出一个**看似成功但少 12 个显式依赖**的镜像。实测退出码：真实清单 0、空清单 1、纯注释 1、文件缺失 2。
+- **CI 包清单守门是第二道防线，不是第一道**：`ci/package-diff.sh` 比对的是两个**已构建**镜像之间的差异，空清单产出的镜像对它并非异常输入，且它只在 PR/发布流程里运行；构建期判空则在每次 `docker build` 的最早期就失败，不依赖 CI 是否被触发。
+- **lint 工具镜像按 `tag@digest` 固定**（`hadolint/hadolint:v2.15.1-alpine@sha256:a1d49ae1…`、`rhysd/actionlint:1.7.12@sha256:b1934ee5…`），yamllint 版本钉在 `1.38.0`。与 actions 由 Dependabot 维护不同，这三个是**手工 bump**：tag 与 digest 必须成对更新，否则注释里记录的对应关系会失真。
 
 ## 6. 体积优化与守门规则
 
@@ -92,7 +96,7 @@
 - **守门机制（已实装）**：`ci/package-diff.sh` 在 PR 上以「上一版已发布镜像」为 baseline 比较 `dpkg-query` 包清单，差异写入 Step Summary 并上传 artifact；任何被移除的包必须登记在 `ci/packages-removed.allow`（附理由，支持 shell 通配模式），否则 CI 失败阻断合并。
 - 规则：**先证明再删**。
 - **Recommends 处置（已量化）**：以本镜像包集合为种子，Debian bookworm 的 Depends 闭包为 484 包 / 2.2 GB，Depends + Recommends 闭包为 1042 包 / 4.8 GB——**仅 Recommends 就引入 558 包 / 2.6 GB**。因此全局关闭 `APT::Install-Recommends`（`build/apt-no-recommends.conf`），并把经审计判定为承重的推荐包显式补回：`qemu-block-extra` 在 `build/packages.txt`；`llvm-18-dev` 因只存在于 apt.llvm.org（脚本运行中才配置该源）而由 `vendor/patches/0002-add-llvm-dev.patch` 补回。
-- **文档与本地化**：用 `dpkg` 的 `path-exclude` 在安装期就不写入 `/usr/share/doc`、`man`、`groff`、`info`、`locale`（保留版权文件与 C/en* locale），而不是装完再删——省的是真实层体积（`build/dpkg-nodoc.conf`）。
+- **文档与本地化**：用 `dpkg` 的 `path-exclude` 在安装期就不写入 `/usr/share/doc`、`man`、`groff`、`info`、`locale`（保留版权文件与 C/en\* locale），而不是装完再删——省的是真实层体积（`build/dpkg-nodoc.conf`）。
 - **移除清单已依据分析预登记**：`ci/packages-removed.allow` 由 2026-10-04 的依赖分析生成（预测 494 个 Recommends-only 包 / 约 2.0 GB，其中 texlive 家族用 `texlive-*` 通配）。CI 的真实 diff 才是权威：漏登记会让 CI 失败并逐个报出，多登记无害；该文件不得包含 `build/packages.txt` 里显式要求的任何包（已自检）。
 - **承重项按实测补齐 / 冗余项按实测移除**（依据为 CI 的包清单 diff）：`openssh-client`（`git` 的 Recommends，缺了它 `git clone git@…` 与 ssh 子模块会失败）显式加回 `build/packages.txt`；反之 Debian 自带的 LLVM/Clang 14 全套与上游脚本安装的 LLVM 18 重复（脚本已把 `llvm-18/bin/*` 软链进 `/usr/bin`），`systemd` 栈与图形库等 Recommends 在容器内无用途——这些移除逐族登记在 allow 文件中，其中「移除 systemd 栈不影响 sudo」由冒烟断言 `sudo -n true` 实测确认。
 - **首次以本改动跑 CI 仍可能失败**：守门机制要求被移除的包逐个登记，第一次运行会用真实 diff 清单告诉我们到底少了什么，登记后才允许合并。这是设计行为（先证明再删），不是故障。
@@ -105,12 +109,13 @@
 
 ## 7. CI 骨架
 
-| Job            | 触发                       | 行为                                                                                       |
-| -------------- | -------------------------- | ------------------------------------------------------------------------------------------ |
-| build + PR 证据 | PR | 构建并 `load` 到本地：跑 `ci/smoke-test.sh`、包清单守门（vs 已发布镜像）、体积报告，包清单作为 artifact；证据报告同时以 PR 评论发布（便于匿名读取与 review）；**不推送** |
-| publish        | push `main` / dispatch     | 构建、冒烟、推送、cosign 签名、生成 SBOM、建 GitHub Release + 日期 tag                     |
-| canary         | 每月 1 日 + 手动          | `no-cache` 从零构建 + 冒烟 + trivy CVE 扫描（仅报告）；**不推送、不建 tag**；每月发布一条滚动 Issue 记录结果（失败或漂移显著标注） |
-| dependabot     | 每周一                     | base digest 与 actions 更新 PR                                                             |
+| Job             | 触发                            | 行为                                                                                                                                                                                                                                                                                                                                                                         |
+| --------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| lint            | PR / push / schedule / dispatch | 只读廉价守门、**不建镜像**：hadolint 查 Dockerfile、actionlint 查 `.github/workflows/`、yamllint 查 workflows 与 `.github/dependabot.yml`；只有 error 级发现阻断（`--failure-threshold error` / actionlint 发现 / yamllint error），style 与 warning 只打印并写进 Step Summary。`permissions: contents: read`；`build` 需 `lint` 与 `structure` 两个前置，`canary` 需 `lint` |
+| build + PR 证据 | PR                              | 构建并 `load` 到本地：跑 `ci/smoke-test.sh`、包清单守门（vs 已发布镜像）、体积报告，包清单作为 artifact；证据报告同时以 PR 评论发布（便于匿名读取与 review）；**不推送**                                                                                                                                                                                                     |
+| publish         | push `main` / dispatch          | 构建、冒烟、推送、cosign 签名、生成 SBOM、建 GitHub Release + 日期 tag                                                                                                                                                                                                                                                                                                       |
+| canary          | 每月 1 日 + 手动                | `no-cache` 从零构建 + 冒烟 + trivy CVE 扫描（仅报告）；**不推送、不建 tag**；每月发布一条滚动 Issue 记录结果（失败或漂移显著标注）                                                                                                                                                                                                                                           |
+| dependabot      | 每周一                          | base digest 与 actions 更新 PR                                                                                                                                                                                                                                                                                                                                               |
 
 `ci/smoke-test.sh` 断言内容：
 
@@ -139,23 +144,24 @@
 
 ## 10. 残余缺口（实施中发现，逐条闭环）
 
-| 缺口 | 影响 | 计划 |
-| ---- | ---- | ---- |
-| ~~上游脚本内部两处构建期未固定引用~~ | ✅ 已闭环 | 步骤② 已完成：`vendor/patches/0001-pin-extra-artifacts.patch` 把 `padjffs2.c` 钉到 `d06b68f`、`openwrt/luci` 钉到 `aa3d488`；patch 由 Dockerfile 在运行脚本前应用，失败即中断构建 |
-| 上游脚本没有 `set -e`，中途失败仍可能产出"看似成功"的镜像 | 静默的残缺环境 | 步骤③：由冒烟测试断言工具链齐全来兜底；不修改 vendored 文件本身的错误处理 |
-| ~~Dockerfile 的 `Fix Complie Link` 层与上游脚本软链逻辑重复~~ | ✅ 已闭环 | 冒烟已断言 `cc`/`gcc` 与 `c++`/`g++` 一致性后，按"先证明再删"删除该层（脚本自身会 `ln -svf` gcc/g++/gcc-ar/gcc-nm/gcc-ranlib 与 c++；`cc` 由 Debian alternatives 提供），由 CI 冒烟与包清单守门验证 |
-| `curl` 必须显式留在 `build/packages.txt`（脚本在安装任何东西之前就要用它），`ca-certificates` 同理 | 缺失会让脚本所有 HTTPS 拉取失败 | 已在步骤①显式列出并在清单内注释原因（`--no-install-recommends` 会移除 curl 的 Recommends） |
+| 缺口                                                                                               | 影响                            | 计划                                                                                                                                                                                                |
+| -------------------------------------------------------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~~上游脚本内部两处构建期未固定引用~~                                                               | ✅ 已闭环                       | 步骤② 已完成：`vendor/patches/0001-pin-extra-artifacts.patch` 把 `padjffs2.c` 钉到 `d06b68f`、`openwrt/luci` 钉到 `aa3d488`；patch 由 Dockerfile 在运行脚本前应用，失败即中断构建                   |
+| 上游脚本没有 `set -e`，中途失败仍可能产出"看似成功"的镜像                                          | 静默的残缺环境                  | 步骤③：由冒烟测试断言工具链齐全来兜底；不修改 vendored 文件本身的错误处理                                                                                                                           |
+| ~~Dockerfile 的 `Fix Complie Link` 层与上游脚本软链逻辑重复~~                                      | ✅ 已闭环                       | 冒烟已断言 `cc`/`gcc` 与 `c++`/`g++` 一致性后，按"先证明再删"删除该层（脚本自身会 `ln -svf` gcc/g++/gcc-ar/gcc-nm/gcc-ranlib 与 c++；`cc` 由 Debian alternatives 提供），由 CI 冒烟与包清单守门验证 |
+| `curl` 必须显式留在 `build/packages.txt`（脚本在安装任何东西之前就要用它），`ca-certificates` 同理 | 缺失会让脚本所有 HTTPS 拉取失败 | 已在步骤①显式列出并在清单内注释原因（`--no-install-recommends` 会移除 curl 的 Recommends）                                                                                                          |
 
+| 空清单守卫的一半依赖 `SHELL` 的 pipefail | 若将来把 SHELL 退回 `/bin/sh`，守卫仍生效但"管道中段失败"会重新静默 | 判空 `[ -z "$PKGS" ]` 不依赖 pipefail，故降级只损失纵深而非全部防护；退回 SHELL 需同步复核本条 |
 | `workflow_dispatch` 带 tag 输入时会重推该 tag 的镜像（可能覆盖已发布 tag） | 与「已发布 tag 永不重写」存在张力 | 已加 job 级 `concurrency` 串行化；该路径仅供维护者有意重建（bullseye 线已冻结，正常无需使用）。若要彻底禁止，需查询注册表并拒绝已存在的 tag——按 YAGNI 暂不做 |
 
 ## 11. 风险与对策
 
-| 风险                                     | 对策                                                                     |
-| ---------------------------------------- | ------------------------------------------------------------------------ |
-| 删包导致少数用户编译特定包失败           | 守门规则（先证明再删）+ tag 不可变，用户可回退引用旧 tag/digest          |
-| cosign v2 → v3 破坏性变更                | 双端验证；不通过则暂留 v2.4.3 并记 issue                                 |
-| vendored 脚本与上游漂移                  | 每月 canary 检测 + 人工同步流程                                          |
-| 上游第三方源不可用导致从零构建失败       | canary 提前发现（不再依赖用户报告）                                      |
+| 风险                               | 对策                                                            |
+| ---------------------------------- | --------------------------------------------------------------- |
+| 删包导致少数用户编译特定包失败     | 守门规则（先证明再删）+ tag 不可变，用户可回退引用旧 tag/digest |
+| cosign v2 → v3 破坏性变更          | 双端验证；不通过则暂留 v2.4.3 并记 issue                        |
+| vendored 脚本与上游漂移            | 每月 canary 检测 + 人工同步流程                                 |
+| 上游第三方源不可用导致从零构建失败 | canary 提前发现（不再依赖用户报告）                             |
 
 ## 12. 一次性验证（2026-10-04）
 

@@ -6,11 +6,11 @@
 
 ## 三个 apt / dpkg 配置片段
 
-| 文件 | 落点（容器内路径） | 解决什么 |
-| ---- | ---- | ---- |
-| `apt-no-recommends.conf` | `/etc/apt/apt.conf.d/99-rtfw-builder` | 全局关闭 `Install-Recommends` / `Install-Suggests` |
-| `dpkg-nodoc.conf` | `/etc/dpkg/dpkg.cfg.d/01-rtfw-builder-nodoc` | 安装期用 `path-exclude` 就不写入 doc / man / groff / info / lintian / locale |
-| `apt-backports.list` | `/etc/apt/sources.list.d/bookworm-backports.list` | 补上 bookworm-backports 源 |
+| 文件                     | 落点（容器内路径）                                | 解决什么                                                                     |
+| ------------------------ | ------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `apt-no-recommends.conf` | `/etc/apt/apt.conf.d/99-rtfw-builder`             | 全局关闭 `Install-Recommends` / `Install-Suggests`                           |
+| `dpkg-nodoc.conf`        | `/etc/dpkg/dpkg.cfg.d/01-rtfw-builder-nodoc`      | 安装期用 `path-exclude` 就不写入 doc / man / groff / info / lintian / locale |
+| `apt-backports.list`     | `/etc/apt/sources.list.d/bookworm-backports.list` | 补上 bookworm-backports 源                                                   |
 
 **为什么必须在第一个 apt 操作之前生效**：这三个片段都是"生效时机敏感"的——它们只在 apt/dpkg
 **执行安装的那一刻**才起作用，事后补放对已经装进去的东西毫无影响。所以 Dockerfile 把三个
@@ -48,11 +48,11 @@ Dockerfile 只负责读取本文件（`grep -vE \'^[[:space:]]*(#|$)\' /tmp/pack
 
 ## 已登记文件
 
-| 文件 | 被谁消费 |
-| ---- | ---- |
-| `apt-backports.list` | Dockerfile `COPY` → 镜像内 apt 源 |
-| `apt-no-recommends.conf` | Dockerfile `COPY` → 镜像内 apt 配置 |
-| `dpkg-nodoc.conf` | Dockerfile `COPY` → 镜像内 dpkg 配置 |
-| `packages.txt` | Dockerfile `COPY` 后在 `apt-get install` 中读取 |
+| 文件                     | 被谁消费                                        |
+| ------------------------ | ----------------------------------------------- |
+| `apt-backports.list`     | Dockerfile `COPY` → 镜像内 apt 源               |
+| `apt-no-recommends.conf` | Dockerfile `COPY` → 镜像内 apt 配置             |
+| `dpkg-nodoc.conf`        | Dockerfile `COPY` → 镜像内 dpkg 配置            |
+| `packages.txt`           | Dockerfile `COPY` 后在 `apt-get install` 中读取 |
 
 新增文件请对照本目录开头的**归类判据**：不被 Dockerfile `COPY` 的东西不要放这里。

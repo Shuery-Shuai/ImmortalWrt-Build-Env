@@ -1,0 +1,17 @@
+---
+# yamllint 守门配置（CI 里由 lint job 显式 -c 指向本文件，
+# 检查范围是 .github/workflows/ 与 .github/dependabot.yml）。
+extends: default
+rules:
+  line-length:
+    # 120 列：本仓库把每个第三方 action 都钉在 40 位 commit SHA 上，
+    # 一行 uses: 装不下 80 列；钉 SHA 这一实践优先于 80 列规则（用户决策）。
+    # 真超 120 列的行必须折行，不许再往上放宽。
+    max: 120
+    allow-non-breakable-words: true
+  truthy:
+    # 关掉「键」检查、保留「值」检查。
+    # 理由：GitHub Actions 要求写法是裸 on:，而 yamllint 按 YAML 1.1 把 on 读成
+    # 布尔 true 并报 truthy。加引号写成 "on": 会改掉 Actions 侧的语义，
+    # 属于为过检查而破坏行为——所以这里抑制规则，而不是改 workflow 的键。
+    check-keys: false
