@@ -36,6 +36,20 @@
 
 ### 修复
 
+- **基础镜像旧 digest 已下架，从零构建卡死**：`FROM` 固定的
+  `sha256:f37a335e…` 已从 Docker Hub 移除，`docker pull` 永久停在首层 0B，构建无法推进。
+  已更新为当前索引 digest `sha256:854dd8ab…`，`LABEL org.opencontainers.image.base.digest`
+  同步更新（两者必须成对，否则 inspect 出的 base 与真实不符）。
+  实测：同一 Dockerfile 由「37 分钟仍失败」变为 189 秒成功构建，hadolint 零告警。
+- **i386 架构声明使 LLVM 18 静默丢失（行为变更）**：`dpkg --add-architecture i386` 的唯一实际效果
+  是强制每个 apt 源提供 `binary-i386` 索引，而第三方源经常不提供。
+  上游脚本的中国网络分支会把 apt.llvm.org 改写到 `mirrors.tuna.tsinghua.edu.cn/llvm-apt`，
+  该站点的 `binary-i386/Packages` 返回 404（官方站为 200），导致 `apt update` 报错、
+  LLVM 源被丢弃；脚本无 `set -e`，于是静默产出缺 clang/lld/llvm 的镜像（冒烟 6 项失败）。
+  现移除该架构声明——Debian 的 multilib 把 32 位库装进 **amd64 包**，单 amd64 索引即可提供
+  `-m32`。实测（全新 debian:bookworm，无 foreign arch）：4 个 multilib 包均从 amd64 索引装成，
+  `dpkg -l | grep -c ":i386"` = 0，`gcc -m32` / `g++ -m32` 编译运行通过（`sizeof(void*)=4`）。
+  **能力不变**：`-m32` 仍可用；移除的仅是一条冗余架构声明。
 - **已发布镜像缺少 LLVM 18 / Node / Go**：上游脚本在非中国网络下不写入 bookworm-backports 源，
   却用 `-t bookworm-backports` 执行 `apt update` 与安装，失败又被脚本的"无 `set -e`"吞掉。
   现已显式提供该源，镜像补回 clang-18 / nodejs 22 / golang-1.25 / python3-requests 等 51 个包。

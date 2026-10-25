@@ -4,7 +4,7 @@
 #   [1] FROM + SHELL            基线按 digest 固定 + shell 语义收敛
 #   [2] LABEL                   OCI 溯源元数据，必须与 [1] 的 digest 一致
 #   [3] COPY x3                 apt/dpkg 行为约束 + backports 源（必须先于任何 apt 操作）
-#   [4] RUN                     系统准备：i386 架构 + apt update + full-upgrade
+#   [4] RUN                     系统准备：apt update + full-upgrade
 #   [5] COPY x2                 包清单、vendored 脚本与补丁落 /tmp
 #   [6] RUN                     装包 -> 打补丁 -> 执行上游脚本 -> 清 apt lists
 #   [7] RUN x2                  builder 用户 + git 系统级身份
@@ -15,7 +15,7 @@
 
 # 基础镜像按 digest 固定以保证可复现；升级由 Dependabot 每周一提 PR（见 .github/dependabot.yml）。
 # 更换 codename（例如 trixie）属于破坏性变更，走 docs/OPTIMIZATION.md §9 的升级触发器流程。
-FROM debian:bookworm@sha256:f37a335e82bca302e955fa39f9dfe28f1be618f016f8a2b56318e5a5111afc26
+FROM debian:bookworm@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61
 
 # 行为变更（相对上一版 Dockerfile）：RUN 的执行 shell 由 /bin/sh(dash) 换成 bash -o pipefail，
 # 使含管道的 RUN 层（本文件仅 [6]）在管道任意一段失败时报错，而非只看最后一段的退出码。
@@ -32,7 +32,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # 溯源元数据与 FROM 行严格成对：digest 升级时两行必须同步改，否则 inspect 出的 base 与真实不符。
 LABEL org.opencontainers.image.base.name="docker.io/library/debian:bookworm" \
-      org.opencontainers.image.base.digest="sha256:f37a335e82bca302e955fa39f9dfe28f1be618f016f8a2b56318e5a5111afc26"
+      org.opencontainers.image.base.digest="sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61"
 
 # ---------------------------------------------------------------------------
 # [3] apt/dpkg 行为约束：三处 COPY 必须全部早于 [4] 的第一个 apt 操作，否则首层 apt 不受约束。
@@ -51,9 +51,20 @@ COPY build/apt-backports.list /etc/apt/sources.list.d/bookworm-backports.list
 # 保留 /var/lib/apt/lists 是设计而非疏漏：本层只做 update + full-upgrade，真正装包的 [6]
 # 要复用这里的 lists，并由 [6] 末尾统一 rm -rf。本层清理会迫使 [6] 重新 update，多一层
 # apt lists 且拖慢构建。故 DL3009 在本层不成立，明确抑制而非“修复”。
+#
+# 刻意不执行 dpkg --add-architecture i386（2026-10-24 移除，先证明再删）：
+#   Debian 的 multilib 方案把 32 位库按 i386-linux-gnu 路径装进 **amd64 包**，
+#   故 gcc-multilib / g++-multilib / libc6-dev-i386 / lib32gcc-s1 全部是 amd64 架构，
+#   单 amd64 索引即可完整提供 -m32 能力。实测（全新 debian:bookworm，无 foreign arch）：
+#     dpkg --print-foreign-architectures 为空；上述 4 包从 amd64 索引装成；
+#     dpkg -l | grep -c ":i386" = 0；gcc -m32 与 g++ -m32 均编译运行通过（sizeof(void*)=4）。
+#   添加 i386 架构的唯一实际效果是强制每个 apt 源提供 binary-i386 索引，而第三方源经常不提供：
+#   mirrors.tuna.tsinghua.edu.cn/llvm-apt 的 binary-i386/Packages 返回 404（官方 apt.llvm.org 为 200），
+#   上游脚本的中国网络分支正是把 llvm 源改写到该镜像，于是 apt update 报错、LLVM 18 源被丢弃，
+#   而脚本无 set -e 会静默产出缺 clang/lld/llvm 的镜像（冒烟 6 项失败，2026-10-24 实测）。
+#   撤销条件：若将来确需安装真正的 i386 二进制包（而非 multilib amd64 包），须连同本注释一并复核。
 # hadolint ignore=DL3009
-RUN dpkg --add-architecture i386 && \
-    apt-get update && \
+RUN apt-get update && \
     apt-get full-upgrade -y
 
 # ---------------------------------------------------------------------------
