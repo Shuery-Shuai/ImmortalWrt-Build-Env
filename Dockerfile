@@ -15,7 +15,7 @@
 
 # 基础镜像按 digest 固定以保证可复现；升级由 Dependabot 每周一提 PR（见 .github/dependabot.yml）。
 # 更换 codename（例如 trixie）属于破坏性变更，走 docs/OPTIMIZATION.md §9 的升级触发器流程。
-FROM debian:bookworm@sha256:854dd8ab51d62866dbd8f5431d15ce77b12983a2a4a1e1fe43a2395dc7ef9f61
+FROM debian:bookworm@sha256:d74df7598108a173a621eda4d58a2adbf850b2d9a9d81bc2cca1a6c21174a880
 
 # 行为变更（相对上一版 Dockerfile）：RUN 的执行 shell 由 /bin/sh(dash) 换成 bash -o pipefail，
 # 使含管道的 RUN 层（本文件仅 [6]）在管道任意一段失败时报错，而非只看最后一段的退出码。
